@@ -358,6 +358,39 @@ test_iterator_basic_backward(void **state)
     }
 }
 
+/*
+ * Test to ensure that the iterator instance is properly
+ * invalidated when the tree structure is mutated.
+ *
+ */
+static void
+test_iterator_mutated(void **state) {
+    (void)state;
+
+    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_itr it;
+
+    avl_add(&tree, NULL, 1);
+    avl_add(&tree, NULL, 2);
+    avl_add(&tree, NULL, 3);
+
+    avl_it_start(&it, &tree, 0);
+
+    int key = 0;
+    void *e = NULL;
+    avl_it_next(&it, &key, &e);
+    assert_int_equal(key, 1);
+
+    avl_add(&tree, NULL, 5);
+
+    int const rc = avl_it_next(&it, &key, &e);
+    assert_int_equal(rc, -1);
+
+    while (tree.size > 0) {
+        avl_rem(&tree, tree.top->key);
+    }
+}
+
 int main(void) {
 
     rng_state = time(NULL);
@@ -372,6 +405,7 @@ int main(void) {
         cmocka_unit_test(test_random_sequence),
         cmocka_unit_test(test_iterator_basic_forward),
         cmocka_unit_test(test_iterator_basic_backward),
+        cmocka_unit_test(test_iterator_mutated),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
