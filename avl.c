@@ -6,43 +6,6 @@
 
 #include <stdio.h>
 
-#define ASTACK_MAX (36)
-#define ASTACK_INIT {.size = 0}
-struct astack {
-    void *s[ASTACK_MAX];
-    int size;
-};
-
-static inline void
-stack_push(struct astack *stack, void *const entry)
-{
-    assert(stack->size < ASTACK_MAX);
-    stack->s[stack->size] = entry;
-    stack->size++;
-}
-
-
-static inline void *
-stack_pop(struct astack *stack)
-{
-    if (stack->size == 0) {
-        return NULL;
-    }
-    stack->size--;
-    return stack->s[stack->size];
-}
-
-
-static inline void *
-stack_peek(struct astack *stack)
-{
-    if (stack->size == 0) {
-        return NULL;
-    }
-    return stack->s[stack->size - 1];
-}
-
-
 void rotate_right(struct avl_node **branch, struct avl_node *node);
 void rotate_left(struct avl_node **branch, struct avl_node *node);
 
@@ -185,6 +148,7 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
     rebalance(tree, &stack);
 
     tree->size++;
+    tree->gen++;
 
     return 0;
 }
@@ -312,6 +276,7 @@ avl_rem(struct avl_tree *tree, int const key)
     rebalance(tree, &stack);
 
     tree->size--;
+    tree->gen++;
 
     return out;
 }
@@ -335,6 +300,8 @@ rotate_right(struct avl_node **branch, struct avl_node *node)
     update_height(left);
 }
 
+// Apply a tree rotation around the pivot point referenced
+// by branch.
 void
 rotate_left(struct avl_node **branch, struct avl_node *node)
 {

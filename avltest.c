@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "avl.h"
+#include "avl_it.h"
 
 struct avl_node *
 create_new_node(void *const elem, int const key)
@@ -255,6 +256,53 @@ test_random_sequence(void **state)
     }
 }
 
+static void
+test_iterator_basic(void **state)
+{
+    (void)state;
+
+    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_itr it;
+
+    avl_add(&tree, (void *)1, 1);
+    avl_add(&tree, (void *)2, 2);
+    avl_add(&tree, (void *)3, 3);
+    avl_add(&tree, (void *)4, 4);
+    avl_add(&tree, (void *)5, 5);
+    avl_add(&tree, (void *)6, 6);
+    avl_add(&tree, (void *)7, 7);
+    avl_add(&tree, (void *)8, 8);
+    avl_add(&tree, (void *)9, 9);
+
+    avl_it_start(&it, &tree);
+
+    void *p = NULL;
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)1);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)2);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)3);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)4);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)5);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)6);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)7);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)8);
+    avl_it_next(&it, &p);
+    assert_ptr_equal(p, (void *)9);
+    int const rc = avl_it_next(&it, &p);
+    assert_int_equal(rc, 1);
+
+    while (tree.size > 0) {
+        avl_rem(&tree, tree.top->key);
+    }
+}
+
 int main(void) {
 
     rng_state = time(NULL);
@@ -267,6 +315,7 @@ int main(void) {
         cmocka_unit_test(test_basic_multiple_nodes),
         cmocka_unit_test(test_known_sequence),
         cmocka_unit_test(test_random_sequence),
+        cmocka_unit_test(test_iterator_basic),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
