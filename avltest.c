@@ -46,7 +46,7 @@ static inline int
 randnum(void)
 {
     int o = xorshift32();
-    return o % 1000;
+    return o % 100000;
 }
 
 
@@ -250,6 +250,9 @@ test_random_sequence(void **state)
         }
     }
 
+    int const tree_health = verify_tree(&tree);
+    assert_int_equal(tree_health, 0);
+
     while (tree.size > 0) {
         void *e = avl_rem(&tree, tree.top->key);
         test_free(e);
@@ -262,7 +265,7 @@ test_iterator_basic_forward(void **state)
     (void)state;
 
     struct avl_tree tree = AVL_TREE_INIT; 
-    struct avl_itr it;
+    struct avl_it it;
 
     avl_add(&tree, NULL, 1);
     avl_add(&tree, NULL, 2);
@@ -313,7 +316,7 @@ test_iterator_basic_backward(void **state)
     (void)state;
 
     struct avl_tree tree = AVL_TREE_INIT; 
-    struct avl_itr it;
+    struct avl_it it;
 
     avl_add(&tree, NULL, 1);
     avl_add(&tree, NULL, 2);
@@ -368,7 +371,7 @@ test_iterator_mutated(void **state) {
     (void)state;
 
     struct avl_tree tree = AVL_TREE_INIT; 
-    struct avl_itr it;
+    struct avl_it it;
 
     avl_add(&tree, NULL, 1);
     avl_add(&tree, NULL, 2);
