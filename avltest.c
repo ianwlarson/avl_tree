@@ -257,46 +257,101 @@ test_random_sequence(void **state)
 }
 
 static void
-test_iterator_basic(void **state)
+test_iterator_basic_forward(void **state)
 {
     (void)state;
 
     struct avl_tree tree = AVL_TREE_INIT; 
     struct avl_itr it;
 
-    avl_add(&tree, (void *)1, 1);
-    avl_add(&tree, (void *)2, 2);
-    avl_add(&tree, (void *)3, 3);
-    avl_add(&tree, (void *)4, 4);
-    avl_add(&tree, (void *)5, 5);
-    avl_add(&tree, (void *)6, 6);
-    avl_add(&tree, (void *)7, 7);
-    avl_add(&tree, (void *)8, 8);
-    avl_add(&tree, (void *)9, 9);
+    avl_add(&tree, NULL, 1);
+    avl_add(&tree, NULL, 2);
+    avl_add(&tree, NULL, 3);
+    avl_add(&tree, NULL, 4);
+    avl_add(&tree, NULL, 5);
+    avl_add(&tree, NULL, 6);
+    avl_add(&tree, NULL, 7);
+    avl_add(&tree, NULL, 8);
+    avl_add(&tree, NULL, 9);
 
-    avl_it_start(&it, &tree);
+    {
+        avl_it_start(&it, &tree, 0);
 
-    void *p = NULL;
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)1);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)2);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)3);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)4);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)5);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)6);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)7);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)8);
-    avl_it_next(&it, &p);
-    assert_ptr_equal(p, (void *)9);
-    int const rc = avl_it_next(&it, &p);
-    assert_int_equal(rc, 1);
+        void *e = NULL;
+        int key = 0;
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 1);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 2);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 3);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 4);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 5);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 6);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 7);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 8);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 9);
+
+        int const rc = avl_it_next(&it, &key, &e);
+        assert_int_equal(rc, 1);
+    }
+
+    while (tree.size > 0) {
+        avl_rem(&tree, tree.top->key);
+    }
+}
+
+static void
+test_iterator_basic_backward(void **state)
+{
+    (void)state;
+
+    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_itr it;
+
+    avl_add(&tree, NULL, 1);
+    avl_add(&tree, NULL, 2);
+    avl_add(&tree, NULL, 3);
+    avl_add(&tree, NULL, 4);
+    avl_add(&tree, NULL, 5);
+    avl_add(&tree, NULL, 6);
+    avl_add(&tree, NULL, 7);
+    avl_add(&tree, NULL, 8);
+    avl_add(&tree, NULL, 9);
+
+    {
+        avl_it_start(&it, &tree, 1);
+
+        void *e = NULL;
+        int key = 0;
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 9);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 8);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 7);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 6);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 5);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 4);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 3);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 2);
+        avl_it_next(&it, &key, &e);
+        assert_int_equal(key, 1);
+
+        int const rc = avl_it_next(&it, &key, &e);
+        assert_int_equal(rc, 1);
+    }
 
     while (tree.size > 0) {
         avl_rem(&tree, tree.top->key);
@@ -315,7 +370,8 @@ int main(void) {
         cmocka_unit_test(test_basic_multiple_nodes),
         cmocka_unit_test(test_known_sequence),
         cmocka_unit_test(test_random_sequence),
-        cmocka_unit_test(test_iterator_basic),
+        cmocka_unit_test(test_iterator_basic_forward),
+        cmocka_unit_test(test_iterator_basic_backward),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

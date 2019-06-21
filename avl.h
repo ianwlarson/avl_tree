@@ -27,6 +27,9 @@ void *avl_rem(struct avl_tree *tree, int const key);
 void *avl_get(struct avl_tree const*const tree, int const key);
 int   avl_height(struct avl_tree const*const tree);
 
+int   avl_min_key(struct avl_tree const*const tree, int *key);
+int   avl_max_key(struct avl_tree const*const tree, int *key);
+
 
 __attribute__((weak)) struct avl_node *create_new_node(void *const elem, int const key);
 __attribute__((weak)) void delete_node(struct avl_node *const node);

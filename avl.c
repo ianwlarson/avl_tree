@@ -417,3 +417,39 @@ rebalance(struct avl_tree *tree, struct astack *stk)
 
     return 0;
 }
+
+// Find the minimum key in the tree
+int
+avl_min_key(struct avl_tree const*const tree, int *key)
+{
+    struct avl_node *n = tree->top;
+    if (n == NULL) {
+        return -1;
+    }
+
+    while (n->lc != NULL) {
+        n = n->lc;
+    }
+
+    *key = n->key;
+
+    return 0;
+}
+
+// Find the maximum key in the tree
+int 
+avl_max_key(struct avl_tree const*const tree, int *key)
+{
+    struct avl_node *n = tree->top;
+    if (n == NULL) {
+        return -1;
+    }
+
+    while (n->rc != NULL) {
+        n = n->rc;
+    }
+
+    *key = n->key;
+
+    return 0;
+}
