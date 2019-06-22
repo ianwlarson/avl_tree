@@ -192,15 +192,22 @@ avl_rem(struct avl_tree *tree, int const key)
                 node = node->rc;
             }
         } else if (node->rc != NULL) {
-            node = node->rc;
             // Find the smallest right child
-            for (;;) {
-                stack_push(&stack, node);
-                if (node->lc == NULL) {
-                    break;
-                }
-                node = node->lc;
-            }
+            node = node->rc;
+            stack_push(&stack, node);
+
+            CRASH_IF(node->lc != NULL);
+            /* Node cannot have a left child because it would
+             * create the illegal tree below.
+             *
+             *            a
+             *             \
+             *              b
+             *             /
+             *            c
+             * If `c` existed, then `a` would have a left child
+             * that would be preferred for replacement.
+             */
         } else {
             CRASH_IF(true);
         }
@@ -222,14 +229,20 @@ avl_rem(struct avl_tree *tree, int const key)
             }
 
         } else {
-            // new_cand is smallest child in right sub-tree
-            // We know new_cand has no left children.
-            if (parent->lc == new_cand) {
-                parent->lc = new_cand->rc;
-            } else {
-                parent->rc = new_cand->rc;
-            }
-
+            CRASH_IF(parent->lc == new_cand);
+            /* `new_cand` cannot be a left child,
+             * because the tree below is illegal.
+             *
+             *            a
+             *             \
+             *              b
+             *             /
+             *            c
+             * If `new_cand` was the left child `c`,
+             * then `a` must have a left child, which
+             * would be preferred for replacement.
+             */
+            parent->rc = new_cand->rc;
         }
 
         candidate->elem = new_cand->elem;

@@ -106,6 +106,12 @@ test_zero_size_tree(void **state)
     assert_null(avl_get(&tree, 22));
     assert_null(avl_rem(&tree, 11));
     assert_int_equal(avl_height(&tree), 0);
+    assert_int_equal(verify_tree(&tree), 0);
+    assert_int_equal(get_balance(tree.top), 0);
+
+    int key = 0;
+    assert_int_equal(avl_min_key(&tree, &key), -1);
+    assert_int_equal(avl_max_key(&tree, &key), -1);
 }
 
 static void
@@ -137,7 +143,7 @@ test_basic_multiple_nodes(void **state)
     struct avl_tree tree = AVL_TREE_INIT;
 
     /* This should produce the following tree
-     *                 3 
+     *                 3
      *                /  \
      *               /    \
      *              1      7
@@ -302,7 +308,7 @@ test_iterator_basic_forward(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_tree tree = AVL_TREE_INIT;
     struct avl_it it;
 
     avl_add(&tree, NULL, 1);
@@ -353,7 +359,7 @@ test_iterator_basic_backward(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_tree tree = AVL_TREE_INIT;
     struct avl_it it;
 
     avl_add(&tree, NULL, 1);
@@ -408,7 +414,7 @@ static void
 test_iterator_mutated(void **state) {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT; 
+    struct avl_tree tree = AVL_TREE_INIT;
     struct avl_it it;
 
     avl_add(&tree, NULL, 1);
@@ -432,6 +438,30 @@ test_iterator_mutated(void **state) {
     }
 }
 
+
+static void
+test_min_and_max_elems(void **state) {
+
+    (void)state;
+    struct avl_tree tree = AVL_TREE_INIT;
+
+    for (int i = -5; i < 10; ++i) {
+        int const rc = avl_add(&tree, NULL, i);
+        assert_return_code(rc, 0);
+    }
+
+    assert_int_equal(tree.size, 15);
+    int key = 0;
+    assert_return_code(avl_min_key(&tree, &key), 0);
+    assert_int_equal(key, -5);
+    assert_return_code(avl_max_key(&tree, &key), 0);
+    assert_int_equal(key, 9);
+
+    while (tree.size > 0) {
+        avl_rem(&tree, tree.top->key);
+    }
+}
+
 int main(void) {
 
     rng_state = time(NULL);
@@ -448,6 +478,7 @@ int main(void) {
         cmocka_unit_test(test_iterator_basic_backward),
         cmocka_unit_test(test_iterator_mutated),
         //cmocka_unit_test(test_random_sequence_long),
+        cmocka_unit_test(test_min_and_max_elems),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
