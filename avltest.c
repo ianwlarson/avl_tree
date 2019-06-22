@@ -43,10 +43,10 @@ xorshift32(void)
 }
 
 static inline int
-randnum(void)
+randnum(int const max)
 {
     int o = xorshift32();
-    return o % 100000;
+    return o % max;
 }
 
 
@@ -251,7 +251,34 @@ test_random_sequence(void **state)
 
     for (int i = 0; i < 100000; ++i) {
         void *e = test_malloc(1);
-        int const n = randnum();
+        int const n = randnum(1000000);
+        int const rc = avl_add(&tree, e, n);
+        if (rc != 0) {
+            test_free(e);
+            e = avl_rem(&tree, n);
+            assert_non_null(e);
+            test_free(e);
+        }
+    }
+
+    int const tree_health = verify_tree(&tree);
+    assert_int_equal(tree_health, 0);
+
+    while (tree.size > 0) {
+        void *e = avl_rem(&tree, tree.top->key);
+        test_free(e);
+    }
+}
+
+static void
+test_random_sequence_long(void **state)
+{
+    (void)state;
+    struct avl_tree tree = AVL_TREE_INIT;
+
+    for (int i = 0; i < 5000000; ++i) {
+        void *e = test_malloc(1);
+        int const n = randnum(100000000);
         int const rc = avl_add(&tree, e, n);
         if (rc != 0) {
             test_free(e);
@@ -420,6 +447,7 @@ int main(void) {
         cmocka_unit_test(test_iterator_basic_forward),
         cmocka_unit_test(test_iterator_basic_backward),
         cmocka_unit_test(test_iterator_mutated),
+        //cmocka_unit_test(test_random_sequence_long),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
