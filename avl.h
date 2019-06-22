@@ -34,7 +34,7 @@ int   avl_max_key(struct avl_tree const*const tree, int *key);
 __attribute__((weak)) struct avl_node *create_new_node(void *const elem, int const key);
 __attribute__((weak)) void delete_node(struct avl_node *const node);
 
-#define ASTACK_MAX (36)
+#define ASTACK_MAX (50)
 #define ASTACK_INIT {.size = 0}
 struct astack {
     void *s[ASTACK_MAX];

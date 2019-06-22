@@ -11,7 +11,7 @@ and deletions are infrequent relative to number of element access.
 ## Implementation
 
 This particular tree is implemented without using recursion or parent pointers in
-the node structures. In order to do this, there is a moderate (~256 bytes) stack usage requirement 
+the node structures. In order to do this, there is a moderate (~400 bytes) stack usage requirement 
 of examining the tree.
 
 
