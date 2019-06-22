@@ -137,15 +137,15 @@ test_basic_multiple_nodes(void **state)
     struct avl_tree tree = AVL_TREE_INIT;
 
     /* This should produce the following tree
-    //                 3 
-    //                /  \
-    //               /    \
-    //              1      7
-    //             / \    / \
-    //            0   2  5   8
-    //                  / \   \
-    //                 4   6   9
-    */
+     *                 3 
+     *                /  \
+     *               /    \
+     *              1      7
+     *             / \    / \
+     *            0   2  5   8
+     *                  / \   \
+     *                 4   6   9
+     */
 
     for (int i = 0; i < 10; ++i) {
         void *const e = test_malloc(10);
@@ -156,8 +156,19 @@ test_basic_multiple_nodes(void **state)
     assert_int_equal(tree.size, 10);
     assert_int_equal(avl_height(&tree), 4);
     assert_int_equal(tree.top->key, 3);
+
     assert_int_equal(tree.top->lc->key, 1);
+    assert_int_equal(tree.top->lc->lc->key, 0);
+    assert_int_equal(tree.top->lc->rc->key, 2);
+
     assert_int_equal(tree.top->rc->key, 7);
+    assert_int_equal(tree.top->rc->lc->key, 5);
+    assert_int_equal(tree.top->rc->rc->key, 8);
+
+    assert_int_equal(tree.top->rc->lc->lc->key, 4);
+    assert_int_equal(tree.top->rc->lc->rc->key, 6);
+
+    assert_int_equal(tree.top->rc->rc->rc->key, 9);
 
     for (int i = 0; i < 10; ++i) {
         void *const e = avl_rem(&tree, i);

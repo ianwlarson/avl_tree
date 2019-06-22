@@ -69,3 +69,38 @@ stack_peek(struct astack *stack)
     }
     return stack->s[stack->size - 1];
 }
+
+
+#define CRASH_IF(condition) assert(!(condition))
+
+
+static inline int
+max(int const a, int const b)
+{
+    return (a > b) ? a : b;
+}
+
+
+static inline int
+get_height(struct avl_node const*const node)
+{
+    if (node == NULL) {
+        return 0;
+    }
+
+    return node->height;
+}
+
+
+// The balance of any node is the height of the right sub-tree
+// minus the height of the left sub-tree.
+static inline int
+get_balance(struct avl_node const*const node)
+{
+    if (node == NULL) {
+        return 0;
+    }
+
+    return get_height(node->rc) - get_height(node->lc);
+}
+

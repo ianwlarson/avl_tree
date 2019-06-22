@@ -2,22 +2,6 @@
 
 #include <assert.h>
 
-static inline int
-max(int const a, int const b)
-{
-    return (a > b) ? a : b;
-}
-
-static inline int
-get_height(struct avl_node const*const n)
-{
-    if (n == NULL) {
-        return 0;
-    }
-
-    return n->height;
-}
-
 static int
 recursive_check_height(struct avl_node *n)
 {

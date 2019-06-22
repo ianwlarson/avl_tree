@@ -12,36 +12,6 @@ void rotate_left(struct avl_node **branch, struct avl_node *node);
 static int dive(struct avl_node *node, struct astack *stk, int const key);
 static int rebalance(struct avl_tree *tree, struct astack *stk);
 
-#define CRASH_IF(condition) assert(!(condition))
-
-static inline int
-max(int const a, int const b)
-{
-    return (a > b) ? a : b;
-}
-
-static inline int
-get_height(struct avl_node const*const node)
-{
-    if (node == NULL) {
-        return 0;
-    }
-
-    return node->height;
-}
-
-// The balance of any node is the height of the right sub-tree
-// minus the height of the left sub-tree.
-static inline int
-get_balance(struct avl_node const*const node)
-{
-    if (node == NULL) {
-        return 0;
-    }
-
-    return get_height(node->rc) - get_height(node->lc);
-}
-
 static inline void
 update_height(struct avl_node *const node)
 {
@@ -68,12 +38,6 @@ delete_node(struct avl_node *const node)
 {
     free(node);
 }
-
-enum direction {
-    LEFT,
-    RIGHT,
-};
-
 
 enum avl_rotate_case {
     BALANCED,
@@ -287,6 +251,12 @@ avl_height(struct avl_tree const*const tree)
     return get_height(tree->top);
 }
 
+/*
+ * Apply a rotation around pivot point `node`
+ *
+ * `branch` is the pointer to `node` which must be updated.
+ *
+ */
 void
 rotate_right(struct avl_node **branch, struct avl_node *node)
 {
@@ -300,8 +270,6 @@ rotate_right(struct avl_node **branch, struct avl_node *node)
     update_height(left);
 }
 
-// Apply a tree rotation around the pivot point referenced
-// by branch.
 void
 rotate_left(struct avl_node **branch, struct avl_node *node)
 {
@@ -315,15 +283,15 @@ rotate_left(struct avl_node **branch, struct avl_node *node)
     update_height(r);
 }
 
-// Search down the tree structure, keeping track of our traversal
-// in the stack.
-//
-// Return value is based on the value on the top of the stack
-//
-// 0 - Empty sub-tree, No node were added to the stack.
-// 1 - The node The left child is NULL
-// 2 - The right child is NULL
-// 3 - The node matches the `key`
+/* Search down the tree structure, keeping track of our traversal
+ * in the stack.
+ * Return value is based on the value on the top of the stack
+ *
+ * 0 - Empty sub-tree, No node were added to the stack.
+ * 1 - The node The left child is NULL
+ * 2 - The right child is NULL
+ * 3 - The node matches the `key`
+ */
 static int
 dive(struct avl_node *node, struct astack *stk, int const key)
 {
@@ -357,7 +325,6 @@ dive(struct avl_node *node, struct astack *stk, int const key)
 static int
 rebalance(struct avl_tree *tree, struct astack *stk)
 {
-    //printf("Starting rebalance.\n");
     struct avl_node *node = stack_pop(stk);
     // Traverse back up the tree, rebalancing and adjusting height
     while (node != NULL) {
@@ -381,30 +348,24 @@ rebalance(struct avl_tree *tree, struct astack *stk)
             }
         }
 
-        //printf("The case is: ");
         switch (rot) {
         case BALANCED:
-            //printf("balanced.\n");
             break;
         case LEFT_LEFT:
             rotate_right(branch, node);
-            //printf("left left\n");
             break;
         case LEFT_RIGHT:
             branch2 = &node->lc;
             rotate_left(branch2, *branch2);
             rotate_right(branch, *branch);
-            //printf("left right\n");
             break;
         case RIGHT_RIGHT:
-            //printf("right right\n");
             rotate_left(branch, node);
             break;
         case RIGHT_LEFT:
             branch2 = &node->rc;
             rotate_right(branch2, *branch2);
             rotate_left(branch, *branch);
-            //printf("right left\n");
             break;
         default:
             CRASH_IF(true);
@@ -413,12 +374,16 @@ rebalance(struct avl_tree *tree, struct astack *stk)
 
         node = stack_pop(stk);
     }
-    //printf("Finished rebalance.\n");
 
     return 0;
 }
 
-// Find the minimum key in the tree
+/*
+ * Find the minimum key present in the tree.
+ *
+ * Returns -1 if the tree is empty
+ *
+ */
 int
 avl_min_key(struct avl_tree const*const tree, int *key)
 {
@@ -436,7 +401,12 @@ avl_min_key(struct avl_tree const*const tree, int *key)
     return 0;
 }
 
-// Find the maximum key in the tree
+/*
+ * Find the maximum key present in the tree.
+ *
+ * Returns -1 if the tree is empty.
+ *
+ */
 int 
 avl_max_key(struct avl_tree const*const tree, int *key)
 {
