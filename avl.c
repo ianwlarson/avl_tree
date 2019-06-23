@@ -80,12 +80,13 @@ find_case(struct avl_node const*const node)
 int
 avl_add(struct avl_tree *tree, void *const elem, int const key)
 {
-    struct astack stack = ASTACK_INIT;
+    struct astack *stack = &tree->stack;
+    stack->size = 0;
 
     struct avl_node *node = tree->top;
 
     // Find the point of insertion into the tree
-    int const rc = dive(node, &stack, key);
+    int const rc = dive(node, stack, key);
 
     switch (rc) {
         case 0:
@@ -94,11 +95,11 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
             return 0;
             break;
         case 1:
-            node = stack_peek(&stack);
+            node = stack_peek(stack);
             node->lc = create_new_node(elem, key);
             break;
         case 2:
-            node = stack_peek(&stack);
+            node = stack_peek(stack);
             node->rc = create_new_node(elem, key);
             break;
         case 3:
@@ -109,7 +110,7 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
             break;
     }
 
-    rebalance(tree, &stack);
+    rebalance(tree, stack);
 
     tree->size++;
     tree->gen++;
@@ -138,17 +139,18 @@ avl_get(struct avl_tree const*const tree, int const key)
 void *
 avl_rem(struct avl_tree *tree, int const key)
 {
-    struct astack stack = ASTACK_INIT;
+    struct astack *stack = &tree->stack;
+    stack->size = 0;
 
     struct avl_node *node = tree->top;
-    int const dive_rc = dive(node, &stack, key);
+    int const dive_rc = dive(node, stack, key);
     if (dive_rc != 3) {
         return NULL;
     }
 
     // At this point, the stack contains an element with key
     // equal to `key`
-    node = stack_pop(&stack);
+    node = stack_pop(stack);
 
     // Store the value to be returned, as well as the node
     void *const out = node->elem;
@@ -157,12 +159,12 @@ avl_rem(struct avl_tree *tree, int const key)
     // If the node is a leaf node, peek the parent,
     // remove references to the candidate, and free the candidate.
     if (node->lc == NULL && node->rc == NULL) {
-        node = stack_peek(&stack);
+        node = stack_peek(stack);
 
         // If there's no parent, the candidate is the last
         // node.
         if (node == NULL) {
-            CRASH_IF(stack.size > 0);
+            CRASH_IF(stack->size > 0);
             tree->top = NULL;
         } else {
             if (node->lc == candidate) {
@@ -177,7 +179,7 @@ avl_rem(struct avl_tree *tree, int const key)
     } else {
         // Push the node back onto the stack, because it will need
         // to be balanced.
-        stack_push(&stack, node);
+        stack_push(stack, node);
 
         // One of the child nodes is not NULL, find a child node
         // to replace the candidate for deletion.
@@ -185,7 +187,7 @@ avl_rem(struct avl_tree *tree, int const key)
             node = node->lc;
             // Find the largest left child
             for (;;) {
-                stack_push(&stack, node);
+                stack_push(stack, node);
                 if (node->rc == NULL) {
                     break;
                 }
@@ -194,7 +196,7 @@ avl_rem(struct avl_tree *tree, int const key)
         } else if (node->rc != NULL) {
             // Find the smallest right child
             node = node->rc;
-            stack_push(&stack, node);
+            stack_push(stack, node);
 
             CRASH_IF(node->lc != NULL);
             /* Node cannot have a left child because it would
@@ -214,8 +216,8 @@ avl_rem(struct avl_tree *tree, int const key)
 
         // At this point, we found the node to replace the node that
         // we're deleting, and every node along the path is on the stack.
-        struct avl_node *const new_cand = stack_pop(&stack);
-        struct avl_node *const parent = stack_peek(&stack);
+        struct avl_node *const new_cand = stack_pop(stack);
+        struct avl_node *const parent = stack_peek(stack);
 
         // Keep any children new_cand has.
         if (new_cand->key < candidate->key) {
@@ -250,7 +252,7 @@ avl_rem(struct avl_tree *tree, int const key)
         delete_node(new_cand);
     }
 
-    rebalance(tree, &stack);
+    rebalance(tree, stack);
 
     tree->size--;
     tree->gen++;

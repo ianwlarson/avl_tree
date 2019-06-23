@@ -5,6 +5,17 @@
 
 #define AVL_TREE_INIT {.top = NULL, .size = 0, .gen = 0}
 
+/*
+ * Stack structure for allowing tree searching/backtracking.
+ *
+ */
+#define ASTACK_MAX (50)
+#define ASTACK_INIT {.size = 0}
+struct astack {
+    void *s[ASTACK_MAX];
+    int size;
+};
+
 struct avl_node {
     void *elem;
     struct avl_node *lc; // left child
@@ -15,6 +26,7 @@ struct avl_node {
 
 struct avl_tree {
     struct avl_node *top;
+    struct astack stack;
     int size;
     unsigned gen;
 };
@@ -34,12 +46,6 @@ int   avl_max_key(struct avl_tree const*const tree, int *key);
 __attribute__((weak)) struct avl_node *create_new_node(void *const elem, int const key);
 __attribute__((weak)) void delete_node(struct avl_node *const node);
 
-#define ASTACK_MAX (50)
-#define ASTACK_INIT {.size = 0}
-struct astack {
-    void *s[ASTACK_MAX];
-    int size;
-};
 
 static inline void
 stack_push(struct astack *stack, void *const entry)
