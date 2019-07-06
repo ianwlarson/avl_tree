@@ -121,19 +121,30 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
 void *
 avl_get(struct avl_tree const*const tree, int const key)
 {
-    struct astack stack = ASTACK_INIT;
-    struct avl_node *const node = tree->top;
+    struct avl_node *node = tree->top;
     if (node == NULL) {
         return NULL;
     }
 
-    int const rc = dive(node, &stack, key);
-    if (rc == 3) {
-        struct avl_node *n = stack_pop(&stack);
-        return n->elem;
+    // Iterate down the tree structure, without using a stack
+    // (gets don't require keeping track of the path.)
+    for (;;) {
+        if (key < node->key) {
+            if (node->lc == NULL) {
+                return NULL;
+            } else {
+                node = node->lc;
+            }
+        } else if (key > node->key) {
+            if (node->rc == NULL) {
+                return NULL;
+            } else {
+                node = node->rc;
+            }
+        } else {
+            return node->elem;
+        }
     }
-
-    return NULL;
 }
 
 void *

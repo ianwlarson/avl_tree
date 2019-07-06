@@ -17,7 +17,10 @@ target_compile_options(avltree_test PRIVATE -O2 -Wall -Wextra -Wpedantic)
 target_link_libraries(avltree_test)
 
 enable_testing()
+
 add_executable(avltest avltest.c)
 target_link_libraries(avltest avltree_test cmocka)
 target_compile_options(avltest PRIVATE -O2 -Wall -Wextra -Wpedantic)
 add_test(NAME avltest COMMAND avltest)
+
+
