@@ -198,6 +198,9 @@ avl_rem(struct avl_tree *tree, int const key)
             node = node->rc;
             stack_push(stack, node);
 
+            // We do not loop and descend to try to find a better replacement
+            // in this case.
+
             CRASH_IF(node->lc != NULL);
             /* Node cannot have a left child because it would
              * create the illegal tree below.

@@ -9,7 +9,7 @@
  * Stack structure for allowing tree searching/backtracking.
  *
  */
-#define ASTACK_MAX (50)
+#define ASTACK_MAX (45)
 #define ASTACK_INIT {.size = 0}
 struct astack {
     void *s[ASTACK_MAX];
