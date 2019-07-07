@@ -5,6 +5,7 @@
 #include <cmocka.h>
 
 #include <stdio.h>
+#include <math.h>
 #include <time.h>
 
 #include "avl.h"
@@ -269,6 +270,7 @@ test_random_sequence(void **state)
 
     int const tree_health = verify_tree(&tree);
     assert_int_equal(tree_health, 0);
+    assert_true(1.0*avl_height(&tree) < 1.44*log2(tree.size));
 
     while (tree.size > 0) {
         void *e = avl_rem(&tree, tree.top->key);
@@ -299,11 +301,71 @@ test_random_sequence_long(void **state)
 
     int const tree_health = verify_tree(&tree);
     assert_int_equal(tree_health, 0);
+    assert_true(1.0*avl_height(&tree) < 1.44*log2(tree.size));
 
     while (tree.size > 0) {
         void *e = avl_rem(&tree, tree.top->key);
         test_free(e);
     }
+}
+
+// Test to ensure long sequences of sequential numbers doesn't
+// cause any issues.
+static void
+test_degenerate_tree_asc(void **state)
+{
+    (void)state;
+    struct avl_tree tree = AVL_TREE_INIT;
+
+    for (int i = 0; i < 1000000; ++i) {
+        void *e = test_malloc(1);
+        int const rc = avl_add(&tree, e, i);
+        assert_return_code(rc, 0);
+    }
+
+    //printf("Tree was a maximum size of %d\n", tree.size);
+    //printf("Tree had a height of %d\n", avl_height(&tree));
+    assert_true(1.0*avl_height(&tree) < 1.44*log2(tree.size));
+
+    int const tree_health = verify_tree(&tree);
+    assert_int_equal(tree_health, 0);
+
+    while (tree.size > 0) {
+        void *e = avl_rem(&tree, tree.top->key);
+        test_free(e);
+    }
+}
+
+// Test to ensure filling and empyting the tree multiple times
+// doesn't cause any weird behavior.
+static void
+test_random_sequence_repeated(void **state)
+{
+    (void)state;
+    struct avl_tree tree = AVL_TREE_INIT;
+
+    for (int i = 0; i < 1000; ++i) {
+        for (int j = 0; j < 1000; ++j) {
+            void *e = test_malloc(1);
+            int const n = randnum(1000000);
+            int const rc = avl_add(&tree, e, n);
+            if (rc != 0) {
+                test_free(e);
+                e = avl_rem(&tree, n);
+                assert_non_null(e);
+                test_free(e);
+            }
+        }
+        int const tree_health = verify_tree(&tree);
+        assert_true(1.0*avl_height(&tree) < 1.44*log2(tree.size));
+        assert_int_equal(tree_health, 0);
+
+        while (tree.size > 0) {
+            void *e = avl_rem(&tree, tree.top->key);
+            test_free(e);
+        }
+    }
+
 }
 
 static void
@@ -477,6 +539,8 @@ int main(void) {
         cmocka_unit_test(test_basic_multiple_nodes),
         cmocka_unit_test(test_known_sequence),
         cmocka_unit_test(test_random_sequence),
+        cmocka_unit_test(test_degenerate_tree_asc),
+        cmocka_unit_test(test_random_sequence_repeated),
         cmocka_unit_test(test_iterator_basic_forward),
         cmocka_unit_test(test_iterator_basic_backward),
         cmocka_unit_test(test_iterator_mutated),
