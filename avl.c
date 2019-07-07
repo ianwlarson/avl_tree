@@ -314,11 +314,14 @@ rotate_left(struct avl_node **branch, struct avl_node *node)
 
 /* Search down the tree structure, keeping track of our traversal
  * in the stack.
- * Return value is based on the value on the top of the stack
+ * Return value is based on the value on the top of the stack.
+ *
+ * Cases 0-2 are used to indicate that the specified key doesn't exist in
+ * the tree and where it may be inserted.
  *
  * 0 - Empty sub-tree, No node were added to the stack.
- * 1 - The node The left child is NULL
- * 2 - The right child is NULL
+ * 1 - The left child of the node on the top of the stack is NULL
+ * 2 - The right child of the node on the top of the stack is NULL
  * 3 - The node matches the `key`
  */
 static int

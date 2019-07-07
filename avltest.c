@@ -282,9 +282,9 @@ test_random_sequence_long(void **state)
     (void)state;
     struct avl_tree tree = AVL_TREE_INIT;
 
-    for (int i = 0; i < 5000000; ++i) {
+    for (int i = 0; i < 10000000; ++i) {
         void *e = test_malloc(1);
-        int const n = randnum(100000000);
+        int const n = randnum(2000000000);
         int const rc = avl_add(&tree, e, n);
         if (rc != 0) {
             test_free(e);
@@ -293,6 +293,9 @@ test_random_sequence_long(void **state)
             test_free(e);
         }
     }
+
+    //printf("Tree was a maximum size of %d\n", tree.size);
+    //printf("Tree had a height of %d\n", avl_height(&tree));
 
     int const tree_health = verify_tree(&tree);
     assert_int_equal(tree_health, 0);
