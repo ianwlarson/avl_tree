@@ -43,11 +43,29 @@ xorshift32(void)
     return rng_state;
 }
 
+// Return a random integer in range (-max, max)
 static inline int
 randnum(int const max)
 {
     int o = xorshift32();
     return o % max;
+}
+
+// Return a nonzero uintptr_t
+static inline uintptr_t
+randuptr(void)
+{
+    union {
+        unsigned long ul[2];
+        uintptr_t uptr;
+    } retval;
+
+    do {
+        retval.ul[0] = xorshift32();
+        retval.ul[1] = xorshift32();
+    } while (retval.uptr == 0);
+
+    return retval.uptr;
 }
 
 
@@ -61,6 +79,12 @@ test_basic_functionality(void **state)
 {
     (void) state;
 
+    {
+        // Test passing a null tree to avl_add returns a negative value.
+        int const rc = avl_add(NULL, NULL, 1);
+        assert_true(rc < 0);
+    }
+
     void *const ptr = test_malloc(10);
 
     struct avl_tree tree = AVL_TREE_INIT;
@@ -70,9 +94,11 @@ test_basic_functionality(void **state)
     assert_return_code(rc, 0);
     assert_int_equal(tree.size, 1);
 
-    // Test than a non-existing element won't be found
+    // Test than a non-existing elements aren't found.
     void *const p1 = avl_get(&tree, 22);
     assert_null(p1);
+    void *const p12 = avl_get(&tree, -22);
+    assert_null(p12);
 
     // Test that the element can be found
     void *const p2 = avl_get(&tree, 1);
@@ -317,7 +343,7 @@ test_degenerate_tree_asc(void **state)
     (void)state;
     struct avl_tree tree = AVL_TREE_INIT;
 
-    for (int i = 0; i < 1000000; ++i) {
+    for (int i = 0; i < 100000; ++i) {
         void *e = test_malloc(1);
         int const rc = avl_add(&tree, e, i);
         assert_return_code(rc, 0);
@@ -344,8 +370,8 @@ test_random_sequence_repeated(void **state)
     (void)state;
     struct avl_tree tree = AVL_TREE_INIT;
 
-    for (int i = 0; i < 1000; ++i) {
-        for (int j = 0; j < 1000; ++j) {
+    for (int i = 0; i < 100; ++i) {
+        for (int j = 0; j < 100; ++j) {
             void *e = test_malloc(1);
             int const n = randnum(1000000);
             int const rc = avl_add(&tree, e, n);
@@ -527,6 +553,51 @@ test_min_and_max_elems(void **state) {
     }
 }
 
+static void
+test_map_functionality(void **state)
+{
+    (void)state;
+    // This test is to ensure that the tree works as a map.
+    // First, a number of key-value pairs are generated randomly,
+    // then inserted into the tree. Then each key is used to look up the
+    // associated value in the tree, which is then checked against the
+    // expected value.
+
+    struct key_value_pair {
+        int key;
+        void *value;
+    };
+    int const test_extent = 10000;
+    struct key_value_pair *items = test_malloc(sizeof(*items) * test_extent);
+
+    for (int i = 0; i < test_extent; ++i) {
+        items[i].key = randnum(1000000);
+        items[i].value = (void *)randuptr();
+    }
+
+    struct avl_tree tree = AVL_TREE_INIT;
+
+    for (int i = 0; i < test_extent; ++i) {
+        int const rc = avl_add(&tree, items[i].value, items[i].key);
+
+        // If the key is a duplicate, just overwrite the value in the lookup table.
+        if (rc == -1) {
+            items[i].value = avl_get(&tree, items[i].key);
+        }
+    }
+
+    for (int i = 0; i < test_extent; ++i) {
+        void *const val = avl_get(&tree, items[i].key);
+        assert_ptr_equal(val, items[i].value);
+    }
+
+    while (tree.size > 0) {
+        avl_rem(&tree, tree.top->key);
+    }
+
+    test_free(items);
+}
+
 int main(void) {
 
     rng_state = time(NULL);
@@ -546,6 +617,7 @@ int main(void) {
         cmocka_unit_test(test_iterator_mutated),
         //cmocka_unit_test(test_random_sequence_long),
         cmocka_unit_test(test_min_and_max_elems),
+        cmocka_unit_test(test_map_functionality),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

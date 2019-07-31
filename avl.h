@@ -36,8 +36,8 @@ int   avl_add(struct avl_tree *tree, void *const elem, int const key);
 void *avl_rem(struct avl_tree *tree, int const key);
 
 // Read-only functions
-void *avl_get(struct avl_tree const*const tree, int const key);
-int   avl_height(struct avl_tree const*const tree);
+void * __attribute__((pure)) avl_get(struct avl_tree const*const tree, int const key);
+int    __attribute__((pure)) avl_height(struct avl_tree const*const tree);
 
 int   avl_min_key(struct avl_tree const*const tree, int *key);
 int   avl_max_key(struct avl_tree const*const tree, int *key);

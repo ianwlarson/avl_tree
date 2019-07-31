@@ -77,9 +77,14 @@ find_case(struct avl_node const*const node)
     }
 }
 
+// Adds an element to the tree. Returns 0 on success, -1 on failure.
 int
 avl_add(struct avl_tree *tree, void *const elem, int const key)
 {
+    if (tree == NULL) {
+        return -1;
+    }
+
     struct astack *stack = &tree->stack;
     stack->size = 0;
 
@@ -118,6 +123,7 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
     return 0;
 }
 
+// Gets the pointer associated with a key.
 void *
 avl_get(struct avl_tree const*const tree, int const key)
 {

@@ -7,14 +7,13 @@ set(CMAKE_C_STANDARD 11)
 
 find_package(cmocka)
 
-# Normal version of the library
+# Normal version of the library, no warnings or anything.
 add_library(avltree SHARED avl.c avl_it.c)
-target_compile_options(avltree PRIVATE -Wall -Wextra -Wpedantic)
 
-# Version with debug symbols
+# Version with debug symbols, warnings, no optimizations, debug symbols
 add_library(avltree_test SHARED avl.c avl_it.c)
-target_compile_options(avltree_test PRIVATE -O2 -Wall -Wextra -Wpedantic)
-target_link_libraries(avltree_test)
+target_compile_options(avltree_test PRIVATE -g -O0 --coverage -Wall -Wextra -Wpedantic)
+target_link_libraries(avltree_test gcov)
 
 enable_testing()
 
