@@ -26,7 +26,6 @@ struct avl_node {
 
 struct avl_tree {
     struct avl_node *top;
-    struct astack stack;
     int size;
     unsigned gen;
 };
@@ -36,11 +35,14 @@ int   avl_add(struct avl_tree *tree, void *const elem, int const key);
 void *avl_rem(struct avl_tree *tree, int const key);
 
 // Read-only functions
-void * __attribute__((pure)) avl_get(struct avl_tree const*const tree, int const key);
-int    __attribute__((pure)) avl_height(struct avl_tree const*const tree);
+__attribute__((pure))
+void *avl_get(struct avl_tree const*const tree, int const key);
 
-int   avl_min_key(struct avl_tree const*const tree, int *key);
-int   avl_max_key(struct avl_tree const*const tree, int *key);
+__attribute__((pure))
+int avl_height(struct avl_tree const*const tree);
+
+int avl_min_key(struct avl_tree const*const tree, int *key);
+int avl_max_key(struct avl_tree const*const tree, int *key);
 
 
 __attribute__((weak)) struct avl_node *create_new_node(void *const elem, int const key);

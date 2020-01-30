@@ -22,7 +22,9 @@ struct avl_node *
 create_new_node(void *const elem, int const key)
 {
     struct avl_node *n = malloc(sizeof(*n));
-    CRASH_IF(n == NULL);
+    if (n == NULL) {
+        abort();
+    }
 
     n->elem = elem;
     n->lc = NULL;
@@ -85,8 +87,8 @@ avl_add(struct avl_tree *tree, void *const elem, int const key)
         return -1;
     }
 
-    struct astack *stack = &tree->stack;
-    stack->size = 0;
+    struct astack l_stack = ASTACK_INIT;
+    struct astack *stack = &l_stack;
 
     struct avl_node *node = tree->top;
 
@@ -156,8 +158,8 @@ avl_get(struct avl_tree const*const tree, int const key)
 void *
 avl_rem(struct avl_tree *tree, int const key)
 {
-    struct astack *stack = &tree->stack;
-    stack->size = 0;
+    struct astack l_stack = ASTACK_INIT;
+    struct astack *stack = &l_stack;
 
     struct avl_node *node = tree->top;
     int const dive_rc = dive(node, stack, key);
