@@ -7,71 +7,116 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <errno.h>
 
 #include "avl.h"
 #include "avl_it.h"
 
-struct avl_node *
-create_new_node(void *const elem, int const key)
+/* Three different objects with the node at different offests into it */
+typedef struct {
+    e_avl_node nd;
+    unsigned data1[16];
+    unsigned data2[16];
+    int key;
+} test_object1;
+
+static inline void
+init_obj1(test_object1 *const p_obj)
 {
-    struct avl_node *n = test_malloc(sizeof(*n));
-
-    n->elem = elem;
-    n->lc = NULL;
-    n->rc = NULL;
-    n->key = key;
-    n->height = 1;
-
-    return n;
+    for (int i = 0; i < sizeof(p_obj->data1) / sizeof(*p_obj->data1); ++i) {
+        p_obj->data1[i] = 0xdeadbeefu;
+    }
+    for (int i = 0; i < sizeof(p_obj->data2) / sizeof(*p_obj->data2); ++i) {
+        p_obj->data2[i] = 0xdeadbeefu;
+    }
 }
 
-void
-delete_node(struct avl_node *const node)
+static inline int
+verify_obj1(test_object1 const*const p_obj)
 {
-    test_free(node);
+    for (int i = 0; i < sizeof(p_obj->data1) / sizeof(*p_obj->data1); ++i) {
+        if (p_obj->data1[i] != 0xdeadbeefu) {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sizeof(p_obj->data2) / sizeof(*p_obj->data2); ++i) {
+        if (p_obj->data2[i] != 0xdeadbeefu) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
-unsigned long rng_state;
-static inline unsigned long
-xorshift32(void)
+typedef struct {
+    unsigned data1[16];
+    e_avl_node nd;
+    unsigned data2[16];
+    int key;
+} test_object2;
+
+static inline void
+init_obj2(test_object2 *const p_obj)
 {
-    unsigned long x = rng_state;
+    for (int i = 0; i < sizeof(p_obj->data1) / sizeof(*p_obj->data1); ++i) {
+        p_obj->data1[i] = 0xdeadbeefu;
+    }
+    for (int i = 0; i < sizeof(p_obj->data2) / sizeof(*p_obj->data2); ++i) {
+        p_obj->data2[i] = 0xdeadbeefu;
+    }
+}
+
+static inline int
+verify_obj2(test_object2 const*const p_obj)
+{
+    for (int i = 0; i < sizeof(p_obj->data1) / sizeof(*p_obj->data1); ++i) {
+        if (p_obj->data1[i] != 0xdeadbeefu) {
+            return 1;
+        }
+    }
+    for (int i = 0; i < sizeof(p_obj->data2) / sizeof(*p_obj->data2); ++i) {
+        if (p_obj->data2[i] != 0xdeadbeefu) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+typedef struct {
+    unsigned data1[16];
+    unsigned data2[16];
+    e_avl_node nd;
+} test_object3;
+
+static inline void
+init_obj3(test_object3 *const p_obj)
+{
+    for (int i = 0; i < sizeof(p_obj->data1) / sizeof(*p_obj->data1); ++i) {
+        p_obj->data1[i] = 0xdeadbeefu;
+    }
+    for (int i = 0; i < sizeof(p_obj->data2) / sizeof(*p_obj->data2); ++i) {
+        p_obj->data2[i] = 0xdeadbeefu;
+    }
+}
+
+static inline unsigned
+xorshift32(unsigned *const p_rng)
+{
+    unsigned x = *p_rng;
     x ^= x << 13;
     x ^= x >> 17;
     x ^= x << 5;
-    rng_state = x;
-    return rng_state;
+    *p_rng = x;
+    return x;
 }
 
-// Return a random integer in range (-max, max)
+/* Return a random integer in range (-max, max) */
 static inline int
-randnum(int const max)
+randnum(unsigned *const p_rng, int const max)
 {
-    int o = xorshift32();
+    int o = xorshift32(p_rng);
     return o % max;
-}
-
-// Return a nonzero uintptr_t
-static inline uintptr_t
-randuptr(void)
-{
-    union {
-        unsigned long ul[2];
-        uintptr_t uptr;
-    } retval;
-
-    do {
-        retval.ul[0] = xorshift32();
-        retval.ul[1] = xorshift32();
-    } while (retval.uptr == 0);
-
-    return retval.uptr;
-}
-
-
-/* A test case that does nothing and succeeds. */
-static void null_test_success(void **state) {
-    (void) state; /* unused */
 }
 
 static void
@@ -79,20 +124,27 @@ test_basic_functionality(void **state)
 {
     (void) state;
 
-    {
-        // Test passing a null tree to avl_add returns a negative value.
-        int const rc = avl_add(NULL, NULL, 1);
-        assert_true(rc < 0);
-    }
+    // Test passing a null tree to avl_add returns a negative value.
+    int rc = avl_add(NULL, NULL, 1, NULL, 0);
+    assert_true(rc < 0);
 
-    void *const ptr = test_malloc(10);
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object1, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
 
-    struct avl_tree tree = AVL_TREE_INIT;
+    test_object1 obj;
+    init_obj1(&obj);
 
     // Test that an element can be added
-    int const rc = avl_add(&tree, ptr, 1);
+    rc = avl_add(&tree, &obj, 1, sbuf, ssize);
     assert_return_code(rc, 0);
-    assert_int_equal(tree.size, 1);
+    assert_true(avl_size(&tree) == 1);
+
+    // Test that an element with an existing key won't be added
+    rc = avl_add(&tree, &obj, 1, sbuf, ssize);
+    assert_int_equal(rc, -1);
+    assert_true(avl_size(&tree) == 1);
 
     // Test than a non-existing elements aren't found.
     void *const p1 = avl_get(&tree, 22);
@@ -103,24 +155,26 @@ test_basic_functionality(void **state)
     // Test that the element can be found
     void *const p2 = avl_get(&tree, 1);
     assert_non_null(p2);
-    assert_ptr_equal(p2, ptr);
+    assert_ptr_equal(p2, &obj);
     assert_int_equal(avl_height(&tree), 1);
 
     // Test that trying to remove a non-existing
     // element won't do anything
-    void *const p3 = avl_rem(&tree, 0);
+    void *const p3 = avl_rem(&tree, 0, sbuf, ssize);
     assert_null(p3);
-    assert_int_equal(tree.size, 1);
+    assert_int_equal(avl_size(&tree), 1);
     assert_int_equal(avl_height(&tree), 1);
 
     // Test that an existing element can be removed
-    void *const p4 = avl_rem(&tree, 1);
+    void *const p4 = avl_rem(&tree, 1, sbuf, ssize);
     assert_non_null(p4);
     assert_ptr_equal(p2, p4);
-    assert_int_equal(tree.size, 0);
+    assert_true(avl_size(&tree) == 0);
     assert_int_equal(avl_height(&tree), 0);
 
-    test_free(p4);
+    assert_int_equal(verify_obj1(&obj), 0);
+
+    test_free(sbuf);
 }
 
 static void
@@ -128,17 +182,54 @@ test_zero_size_tree(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT;
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object1, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
 
     assert_null(avl_get(&tree, 22));
-    assert_null(avl_rem(&tree, 11));
+    assert_null(avl_rem(&tree, 11, sbuf, ssize));
+
     assert_int_equal(avl_height(&tree), 0);
     assert_int_equal(verify_tree(&tree), 0);
-    assert_int_equal(get_balance(tree.top), 0);
 
     int key = 0;
     assert_int_equal(avl_min_key(&tree, &key), -1);
     assert_int_equal(avl_max_key(&tree, &key), -1);
+
+    test_free(sbuf);
+}
+
+static void
+test_small_stack(void **state)
+{
+    (void)state;
+
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object1, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
+
+    void *small_stack[1];
+
+    test_object1 *objs = test_malloc(sizeof(*objs) * 50);
+    assert_non_null(objs);
+    int status = 0;
+    for (int i = 0; i < 49; ++i) {
+        status = avl_add(&tree, &objs[i], i, sbuf, ssize);
+        assert_int_equal(status, 0);
+    }
+
+    status = avl_add(&tree, &objs[49], 49, small_stack, sizeof(small_stack));
+    assert_int_equal(status, -1);
+    assert_int_equal(errno, ENOMEM);
+
+    void *out = avl_rem(&tree, 1, small_stack, sizeof(small_stack));
+    assert_ptr_equal(out, NULL);
+    assert_int_equal(errno, ENOMEM);
+
+    test_free(sbuf);
+    test_free(objs);
 }
 
 static void
@@ -146,20 +237,43 @@ test_basic_right_right_rotate(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT;
-    avl_add(&tree, NULL, 1);
-    avl_add(&tree, NULL, 2);
-    avl_add(&tree, NULL, 3);
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object2, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
+
+    test_object2 *objs = test_malloc(sizeof(*objs) * 3);
+    for (int i = 0; i < 3; ++i) {
+        objs[i].key = i;
+        init_obj2(&objs[i]);
+    }
+
+    /* Add 3 nodes to the tree and verify that the height indicates the tree was
+     * balanced */
+    avl_add(&tree, &objs[0], 0, sbuf, ssize);
+    avl_add(&tree, &objs[1], 1, sbuf, ssize);
+    avl_add(&tree, &objs[2], 2, sbuf, ssize);
 
     assert_int_equal(avl_height(&tree), 2);
-    assert_int_equal(tree.size, 3);
+    assert_true(avl_size(&tree) == 3);
 
-    avl_rem(&tree, 2);
-    avl_rem(&tree, 1);
-    avl_rem(&tree, 3);
+    test_object2 *obj = NULL;
+    obj = avl_rem(&tree, 1, sbuf, ssize);
+    assert_int_equal(obj->key, 1);
+    obj = avl_rem(&tree, 0, sbuf, ssize);
+    assert_int_equal(obj->key, 0);
+    obj = avl_rem(&tree, 2, sbuf, ssize);
+    assert_int_equal(obj->key, 2);
 
     assert_int_equal(avl_height(&tree), 0);
-    assert_int_equal(tree.size, 0);
+    assert_int_equal(avl_size(&tree), 0);
+
+    for (int i = 0; i < 3; ++i) {
+        assert_int_equal(verify_obj2(&objs[i]), 0);
+    }
+
+    test_free(sbuf);
+    test_free(objs);
 }
 
 static void
@@ -167,7 +281,11 @@ test_basic_multiple_nodes(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT;
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object2, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
+    int status = 0;
 
     /* This should produce the following tree
      *                 3
@@ -181,36 +299,51 @@ test_basic_multiple_nodes(void **state)
      */
 
     for (int i = 0; i < 10; ++i) {
-        void *const e = test_malloc(10);
-        int const rc = avl_add(&tree, e, i);
+        test_object2 *const obj2 = test_malloc(sizeof(*obj2));
+        init_obj2(obj2);
+        obj2->key = i;
+        int const rc = avl_add(&tree, obj2, i, sbuf, ssize);
         assert_return_code(rc, 0);
     }
 
-    assert_int_equal(tree.size, 10);
+    int key;
+    status = avl_min_key(&tree, &key);
+    assert_int_equal(status, 0);
+    assert_int_equal(key, 0);
+    status = avl_max_key(&tree, &key);
+    assert_int_equal(status, 0);
+    assert_int_equal(key, 9);
+
+    assert_true(avl_size(&tree) == 10);
     assert_int_equal(avl_height(&tree), 4);
-    assert_int_equal(tree.top->key, 3);
+    assert_int_equal(tree.m_top->key, 3);
 
-    assert_int_equal(tree.top->lc->key, 1);
-    assert_int_equal(tree.top->lc->lc->key, 0);
-    assert_int_equal(tree.top->lc->rc->key, 2);
+    assert_int_equal(tree.m_top->lc->key, 1);
+    assert_int_equal(tree.m_top->lc->lc->key, 0);
+    assert_int_equal(tree.m_top->lc->rc->key, 2);
 
-    assert_int_equal(tree.top->rc->key, 7);
-    assert_int_equal(tree.top->rc->lc->key, 5);
-    assert_int_equal(tree.top->rc->rc->key, 8);
+    assert_int_equal(tree.m_top->rc->key, 7);
+    assert_int_equal(tree.m_top->rc->lc->key, 5);
+    assert_int_equal(tree.m_top->rc->rc->key, 8);
 
-    assert_int_equal(tree.top->rc->lc->lc->key, 4);
-    assert_int_equal(tree.top->rc->lc->rc->key, 6);
+    assert_int_equal(tree.m_top->rc->lc->lc->key, 4);
+    assert_int_equal(tree.m_top->rc->lc->rc->key, 6);
 
-    assert_int_equal(tree.top->rc->rc->rc->key, 9);
+    assert_int_equal(tree.m_top->rc->rc->rc->key, 9);
+    assert_null(tree.m_top->rc->rc->lc);
 
     for (int i = 0; i < 10; ++i) {
-        void *const e = avl_rem(&tree, i);
-        assert_non_null(e);
-        test_free(e);
+        test_object2 *const obj2 = avl_rem(&tree, i, sbuf, ssize);
+        assert_non_null(obj2);
+        assert_int_equal(obj2->key, i);
+        assert_int_equal(verify_obj2(obj2), 0);
+        test_free(obj2);
     }
 
-    assert_int_equal(tree.size, 0);
+    assert_true(avl_size(&tree) == 0);
     assert_int_equal(avl_height(&tree), 0);
+
+    test_free(sbuf);
 }
 
 // Testing a sequence based off of a known valid
@@ -220,62 +353,171 @@ test_known_sequence(void **state)
 {
     (void)state;
 
-    struct avl_tree tree = AVL_TREE_INIT;
-    avl_add(&tree, NULL, 1);
-    avl_add(&tree, NULL, 9);
-    avl_add(&tree, NULL, 2);
-    avl_add(&tree, NULL, 8);
-    avl_add(&tree, NULL, 3);
-    avl_add(&tree, NULL, 7);
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object2, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
 
-    assert_int_equal(tree.top->key, 3);
+    test_object2 *objs = test_malloc(sizeof(*objs) * 16);
+    for (int i = 0; i < 16; ++i) {
+        init_obj2(&objs[i]);
+        objs[i].key = i;
+    }
+
+    avl_add(&tree, &objs[1], 1, sbuf, ssize);
+    avl_add(&tree, &objs[9], 9, sbuf, ssize);
+    avl_add(&tree, &objs[2], 2, sbuf, ssize);
+    avl_add(&tree, &objs[8], 8, sbuf, ssize);
+    avl_add(&tree, &objs[3], 3, sbuf, ssize);
+    avl_add(&tree, &objs[7], 7, sbuf, ssize);
+
+    assert_int_equal(tree.m_top->key, 3);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_rem(&tree, 3);
+    test_object2 *l_obj = avl_rem(&tree, 3, sbuf, ssize);
+    assert_int_equal(l_obj->key, 3);
 
-    assert_int_equal(tree.top->key, 2);
+    assert_int_equal(tree.m_top->key, 2);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_rem(&tree, 2);
+    l_obj = avl_rem(&tree, 2, sbuf, ssize);
+    assert_int_equal(l_obj->key, 2);
 
-    assert_int_equal(tree.top->key, 8);
+    assert_int_equal(tree.m_top->key, 8);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_add(&tree, NULL, 5);
-    assert_int_equal(tree.top->key, 8);
-    assert_int_equal(tree.top->lc->key, 5);
-    assert_int_equal(tree.top->lc->lc->key, 1);
-    assert_int_equal(tree.top->lc->rc->key, 7);
+    avl_add(&tree, &objs[5], 5, sbuf, ssize);
+    assert_int_equal(tree.m_top->key, 8);
+    assert_int_equal(tree.m_top->lc->key, 5);
+    assert_int_equal(tree.m_top->lc->lc->key, 1);
+    assert_int_equal(tree.m_top->lc->rc->key, 7);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_add(&tree, NULL, 10);
-    avl_add(&tree, NULL, 6);
-    assert_int_equal(tree.top->key, 8);
+    avl_add(&tree, &objs[10], 10, sbuf, ssize);
+    avl_add(&tree, &objs[6], 6, sbuf, ssize);
+    assert_int_equal(tree.m_top->key, 8);
     assert_int_equal(avl_height(&tree), 4);
 
-    avl_rem(&tree, 8);
-    assert_int_equal(tree.top->key, 7);
+    l_obj = avl_rem(&tree, 8, sbuf, ssize);
+    assert_int_equal(l_obj->key, 8);
+
+    assert_int_equal(tree.m_top->key, 7);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_rem(&tree, 9);
-    avl_rem(&tree, 10);
-    assert_int_equal(tree.top->key, 5);
+    l_obj = avl_rem(&tree, 9, sbuf, ssize);
+    assert_int_equal(l_obj->key, 9);
+
+    l_obj = avl_rem(&tree, 10, sbuf, ssize);
+    assert_int_equal(l_obj->key, 10);
+
+    assert_int_equal(tree.m_top->key, 5);
     assert_int_equal(avl_height(&tree), 3);
 
-    avl_rem(&tree, 1);
-    assert_int_equal(tree.top->key, 6);
+    l_obj = avl_rem(&tree, 1, sbuf, ssize);
+    assert_int_equal(l_obj->key, 1);
+
+    assert_int_equal(tree.m_top->key, 6);
     assert_int_equal(avl_height(&tree), 2);
 
-    avl_rem(&tree, 5);
-    avl_rem(&tree, 6);
-    assert_int_equal(tree.top->key, 7);
+    l_obj = avl_rem(&tree, 5, sbuf, ssize);
+    assert_int_equal(l_obj->key, 5);
+    l_obj = avl_rem(&tree, 6, sbuf, ssize);
+    assert_int_equal(l_obj->key, 6);
+
+    assert_int_equal(tree.m_top->key, 7);
     assert_int_equal(avl_height(&tree), 1);
 
-    avl_rem(&tree, 7);
-    assert_int_equal(tree.size, 0);
+    l_obj = avl_rem(&tree, 7, sbuf, ssize);
+    assert_int_equal(l_obj->key, 7);
+    assert_int_equal(avl_size(&tree), 0);
+
+    for (int i = 0; i < 16; ++i) {
+        verify_obj2(&objs[i]);
+    }
+    test_free(objs);
+    test_free(sbuf);
 }
 
+static void
+test_left_right_rotation(void **state)
+{
+    (void)state;
+    struct avl_tree tree;
+    avl_tree_init(&tree, offsetof(test_object2, nd));
+    size_t const ssize = sizeof(void *) * 64;
+    void *const sbuf = test_malloc(ssize);
 
+    test_object2 *objs = test_malloc(sizeof(*objs) * 20);
+    for (int i = 0; i < 16; ++i) {
+        init_obj2(&objs[i]);
+        objs[i].key = i;
+    }
+
+    avl_add(&tree, &objs[13], 13, sbuf, ssize);
+    avl_add(&tree, &objs[10], 10, sbuf, ssize);
+    avl_add(&tree, &objs[15], 15, sbuf, ssize);
+    avl_add(&tree, &objs[5], 5, sbuf, ssize);
+    avl_add(&tree, &objs[11], 11, sbuf, ssize);
+    avl_add(&tree, &objs[16], 16, sbuf, ssize);
+    avl_add(&tree, &objs[4], 4, sbuf, ssize);
+    avl_add(&tree, &objs[6], 6, sbuf, ssize);
+
+    /*
+     *                13
+     *               /  \
+     *              /    \
+     *             10     15
+     *            /  \      \
+     *           5    11     16
+     *          / \
+     *         4   6
+     */
+
+    assert_int_equal(tree.m_top->key, 13);
+    assert_int_equal(tree.m_top->lc->key, 10);
+    assert_int_equal(tree.m_top->rc->key, 15);
+
+    assert_int_equal(tree.m_top->lc->lc->key, 5);
+    assert_int_equal(tree.m_top->lc->rc->key, 11);
+
+    assert_int_equal(tree.m_top->lc->lc->lc->key, 4);
+    assert_int_equal(tree.m_top->lc->lc->rc->key, 6);
+
+    assert_int_equal(tree.m_top->rc->rc->key, 16);
+    /*
+     * Add 7 transforms it to:
+     *                13
+     *               /  \
+     *              /    \
+     *             6     15
+     *            / \      \
+     *           5   10     16
+     *          /   /  \
+     *         4   7    11
+     */
+
+    avl_add(&tree, &objs[7], 7, sbuf, ssize);
+
+    assert_int_equal(tree.m_top->key, 13);
+    assert_int_equal(tree.m_top->lc->key, 6);
+    assert_int_equal(tree.m_top->rc->key, 15);
+
+    assert_int_equal(tree.m_top->lc->lc->key, 5);
+    assert_int_equal(tree.m_top->lc->rc->key, 10);
+
+    assert_int_equal(tree.m_top->lc->lc->lc->key, 4);
+
+    assert_int_equal(tree.m_top->lc->rc->lc->key, 7);
+    assert_int_equal(tree.m_top->lc->rc->rc->key, 11);
+
+    assert_int_equal(tree.m_top->rc->rc->key, 16);
+
+    test_free(sbuf);
+    test_free(objs);
+
+}
+
+#if 0
 static void
 test_random_sequence(void **state)
 {
@@ -453,6 +695,7 @@ test_iterator_basic_backward(void **state)
     struct avl_tree tree = AVL_TREE_INIT;
     struct avl_it it;
 
+
     avl_add(&tree, NULL, 1);
     avl_add(&tree, NULL, 2);
     avl_add(&tree, NULL, 3);
@@ -598,17 +841,19 @@ test_map_functionality(void **state)
     test_free(items);
 }
 
+#endif
+
 int main(void) {
 
-    rng_state = time(NULL);
-
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(null_test_success),
         cmocka_unit_test(test_zero_size_tree),
+        cmocka_unit_test(test_small_stack),
         cmocka_unit_test(test_basic_functionality),
         cmocka_unit_test(test_basic_right_right_rotate),
         cmocka_unit_test(test_basic_multiple_nodes),
         cmocka_unit_test(test_known_sequence),
+        cmocka_unit_test(test_left_right_rotation),
+#if 0
         cmocka_unit_test(test_random_sequence),
         cmocka_unit_test(test_degenerate_tree_asc),
         cmocka_unit_test(test_random_sequence_repeated),
@@ -618,6 +863,7 @@ int main(void) {
         //cmocka_unit_test(test_random_sequence_long),
         cmocka_unit_test(test_min_and_max_elems),
         cmocka_unit_test(test_map_functionality),
+#endif
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

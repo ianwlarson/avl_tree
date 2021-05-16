@@ -1,38 +1,49 @@
 #pragma once
 
 #include <stdlib.h>
+#include <stddef.h>
 #include <assert.h>
 
-#define AVL_TREE_INIT {.top = NULL, .size = 0, .gen = 0}
-
-/*
- * Stack structure for allowing tree searching/backtracking.
- *
- */
-#define ASTACK_MAX (45)
-#define ASTACK_INIT {.size = 0}
-struct astack {
-    void *s[ASTACK_MAX];
-    int size;
-};
+/* embedded avl node */
+typedef struct avl_node e_avl_node;
 
 struct avl_node {
-    void *elem;
-    struct avl_node *lc; // left child
-    struct avl_node *rc; // right child
+    e_avl_node *lc;
+    e_avl_node *rc;
     int key;
     int height;
 };
 
+typedef struct avl_tree avl_tree_t;
+
 struct avl_tree {
-    struct avl_node *top;
-    int size;
-    unsigned gen;
+    e_avl_node *m_top; /* top of the tree */
+    size_t m_node_offset; /* offset into the object to find the e_avl_node */
+    size_t m_size;
+    unsigned m_gen; /* generation is used for iterators */
 };
 
+static inline void
+avl_tree_init(avl_tree_t *const p_tree, size_t const p_offset)
+{
+    *p_tree = (avl_tree_t) {
+        .m_top = NULL,
+        .m_node_offset = p_offset,
+        .m_size = 0,
+        .m_gen = 0,
+    };
+}
+
+__attribute__((pure))
+static inline size_t
+avl_size(avl_tree_t const*const p_tree)
+{
+    return p_tree->m_size;
+}
+
 // Mutate functions
-int   avl_add(struct avl_tree *tree, void *const elem, int const key);
-void *avl_rem(struct avl_tree *tree, int const key);
+int   avl_add(struct avl_tree *tree, void *const elem, int const key, void *const stack_buffer, size_t const buffer_size);
+void *avl_rem(struct avl_tree *tree, int const key, void *const stack_buffer, size_t const buffer_size);
 
 // Read-only functions
 __attribute__((pure))
@@ -44,71 +55,4 @@ int avl_height(struct avl_tree const*const tree);
 int avl_min_key(struct avl_tree const*const tree, int *key);
 int avl_max_key(struct avl_tree const*const tree, int *key);
 
-
-__attribute__((weak)) struct avl_node *create_new_node(void *const elem, int const key);
-__attribute__((weak)) void delete_node(struct avl_node *const node);
-
-
-static inline void
-stack_push(struct astack *stack, void *const entry)
-{
-    assert(stack->size < ASTACK_MAX);
-    stack->s[stack->size] = entry;
-    stack->size++;
-}
-
-
-static inline void *
-stack_pop(struct astack *stack)
-{
-    if (stack->size == 0) {
-        return NULL;
-    }
-    stack->size--;
-    return stack->s[stack->size];
-}
-
-
-static inline void *
-stack_peek(struct astack *stack)
-{
-    if (stack->size == 0) {
-        return NULL;
-    }
-    return stack->s[stack->size - 1];
-}
-
-
-#define CRASH_IF(condition) assert(!(condition))
-
-
-static inline int
-max(int const a, int const b)
-{
-    return (a > b) ? a : b;
-}
-
-
-static inline int
-get_height(struct avl_node const*const node)
-{
-    if (node == NULL) {
-        return 0;
-    }
-
-    return node->height;
-}
-
-
-// The balance of any node is the height of the right sub-tree
-// minus the height of the left sub-tree.
-static inline int
-get_balance(struct avl_node const*const node)
-{
-    if (node == NULL) {
-        return 0;
-    }
-
-    return get_height(node->rc) - get_height(node->lc);
-}
-
+// vim: filetype=c

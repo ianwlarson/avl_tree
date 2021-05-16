@@ -1,210 +1,250 @@
-
-#include "avl.h"
-
 #include <stdbool.h>
+#include <errno.h>
 #include <assert.h>
 
-#include <stdio.h>
+#include "avl.h"
+#include "astack.h"
 
-void rotate_right(struct avl_node **branch, struct avl_node *node);
-void rotate_left(struct avl_node **branch, struct avl_node *node);
 
-static int dive(struct avl_node *node, struct astack *stk, int const key);
+static inline int
+max_int(int const a, int const b)
+{
+    return (a > b) ? a : b;
+}
+
+#define DFOUND  0
+#define DLEFT   1
+#define DRIGHT  2
+
+/* Search down the tree structure, keeping track of our traversal
+ * in the stack.
+ * Return value is based on the value on the top of the stack.
+ *
+ * - Cases where the node doesn't exist in the tree
+ *   DLEFT  - The left child of the node on the top of the stack is NULL
+ *   DRIGHT - The right child of the node on the top of the stack is NULL
+ *
+ * - Cases where the node is found
+ *   DFOUND - A node with a matching key was found in the tree
+ */
+static inline int
+dive(e_avl_node *p_nd, astack_t *const p_stack, int const key)
+{
+    int status = DFOUND;
+    for (;;) {
+        status = stack_push(p_stack, p_nd);
+
+        if (key < p_nd->key) {
+            if (p_nd->lc == NULL) {
+                status = DLEFT;
+                break;
+            } else {
+                p_nd = p_nd->lc;
+            }
+        } else if (key > p_nd->key) {
+            if (p_nd->rc == NULL) {
+                status = DRIGHT;
+                break;
+            } else {
+                p_nd = p_nd->rc;
+            }
+        } else {
+            // We have found an element with key `key`
+            status = DFOUND;
+            break;
+        }
+    }
+
+    return status;
+}
+
 static int rebalance(struct avl_tree *tree, struct astack *stk);
+
+static inline int
+get_height(e_avl_node const*const p_n)
+{
+    if (p_n == NULL) {
+        return 0;
+    }
+
+    return p_n->height;
+}
 
 static inline void
 update_height(struct avl_node *const node)
 {
-    node->height = 1 + max(get_height(node->lc), get_height(node->rc));
+    node->height = 1 + max_int(get_height(node->lc), get_height(node->rc));
 }
 
-struct avl_node *
-create_new_node(void *const elem, int const key)
+static inline void
+init_node(e_avl_node *const p_node, unsigned const p_key)
 {
-    struct avl_node *n = malloc(sizeof(*n));
-    if (n == NULL) {
-        abort();
-    }
-
-    n->elem = elem;
-    n->lc = NULL;
-    n->rc = NULL;
-    n->key = key;
-    n->height = 1;
-
-    return n;
+    *p_node = (e_avl_node) {
+        .lc = NULL,
+        .rc = NULL,
+        .height = 1,
+        .key = p_key,
+    };
 }
 
-void
-delete_node(struct avl_node *const node)
+#define ROT_BALANCED  0x00000000u
+#define ROT_FIRST_L   0x00000001u
+#define ROT_FIRST_R   0x00000002u
+#define ROT_FMASK     (ROT_FIRST_L | ROT_FIRST_R)
+#define ROT_SECND_L   0x00000004u
+#define ROT_SECND_R   0x00000008u
+
+static inline unsigned
+find_case(e_avl_node const*const node)
 {
-    free(node);
-}
+    int const height_rc = get_height(node->rc);
+    int const height_lc = get_height(node->lc);
 
-enum avl_rotate_case {
-    BALANCED,
-    LEFT_LEFT,
-    LEFT_RIGHT,
-    RIGHT_RIGHT,
-    RIGHT_LEFT,
-};
+    int const balance = height_rc - height_lc;
 
-static inline enum avl_rotate_case
-find_case(struct avl_node const*const node)
-{
-    int const balance = get_balance(node);
+    unsigned rot_case = ROT_BALANCED;
 
-    if (balance >= -1 && balance <= 1) {
-        return BALANCED;
-    }
+    if (balance < -1 || balance > 1) {
+        if (height_lc > height_rc) {
+            rot_case |= ROT_FIRST_L;
 
-    if (get_height(node->lc) > get_height(node->rc)) {
-        struct avl_node const*const child = node->lc;
+            struct avl_node const*const child = node->lc;
 
-        // When the heights are equal, default to the easier case
-        if (get_height(child->lc) >= get_height(child->rc)) {
-            return LEFT_LEFT;
+            if (get_height(child->lc) < get_height(child->rc)) {
+                rot_case |= ROT_SECND_R;
+            }
         } else {
-            return LEFT_RIGHT;
-        }
-    } else {
-        struct avl_node const*const child = node->rc;
+            rot_case |= ROT_FIRST_R;
 
-        // When the heights are equal, default to the easier case
-        if (get_height(child->lc) > get_height(child->rc)) {
-            return RIGHT_LEFT;
-        } else {
-            return RIGHT_RIGHT;
+            struct avl_node const*const child = node->rc;
+
+            if (get_height(child->lc) > get_height(child->rc)) {
+                rot_case |= ROT_SECND_L;
+            }
         }
     }
+
+    return rot_case;
 }
 
 // Adds an element to the tree. Returns 0 on success, -1 on failure.
 int
-avl_add(struct avl_tree *tree, void *const elem, int const key)
+avl_add(avl_tree_t *const tree, void *const p_obj, int const key, void *const stack_buffer, size_t const buffer_size)
 {
     if (tree == NULL) {
         return -1;
     }
 
-    struct astack l_stack = ASTACK_INIT;
-    struct astack *stack = &l_stack;
+    e_avl_node *const add_node = (void *)((unsigned char *)p_obj + tree->m_node_offset);
+    init_node(add_node, key);
 
-    struct avl_node *node = tree->top;
+    if (tree->m_size == 0) {
+        tree->m_top = add_node;
+    } else {
 
-    // Find the point of insertion into the tree
-    int const rc = dive(node, stack, key);
-
-    switch (rc) {
-        case 0:
-            tree->top = create_new_node(elem, key);
-            tree->size++;
-            return 0;
-            break;
-        case 1:
-            node = stack_peek(stack);
-            node->lc = create_new_node(elem, key);
-            break;
-        case 2:
-            node = stack_peek(stack);
-            node->rc = create_new_node(elem, key);
-            break;
-        case 3:
+        astack_t l_stack = stack_init(stack_buffer, buffer_size);
+        astack_t *const stack = &l_stack;
+        if (l_stack.max_sz < avl_height(tree)) {
+            errno = ENOMEM;
             return -1;
-            break;
-        default:
-            CRASH_IF(true);
-            break;
+        }
+
+        // Find the point of insertion into the tree
+        int const rc = dive(tree->m_top, stack, key);
+
+        e_avl_node *const parent = stack_peek(stack);
+        if (rc == DLEFT) {
+            parent->lc = add_node;
+        } else if (rc == DRIGHT) {
+            parent->rc = add_node;
+        } else {
+            errno = EEXIST;
+            return -1;
+        }
+
+        rebalance(tree, stack);
     }
 
-    rebalance(tree, stack);
-
-    tree->size++;
-    tree->gen++;
+    ++tree->m_size;
+    ++tree->m_gen;
 
     return 0;
 }
 
 // Gets the pointer associated with a key.
 void *
-avl_get(struct avl_tree const*const tree, int const key)
+avl_get(avl_tree_t const*const tree, int const key)
 {
-    struct avl_node *node = tree->top;
-    if (node == NULL) {
-        return NULL;
-    }
+    e_avl_node *node = tree->m_top;
 
     // Iterate down the tree structure, without using a stack
     // (gets don't require keeping track of the path.)
     for (;;) {
+        if (node == NULL) {
+            return NULL;
+        }
+
         if (key < node->key) {
-            if (node->lc == NULL) {
-                return NULL;
-            } else {
-                node = node->lc;
-            }
+            node = node->lc;
         } else if (key > node->key) {
-            if (node->rc == NULL) {
-                return NULL;
-            } else {
-                node = node->rc;
-            }
+            node = node->rc;
         } else {
-            return node->elem;
+            return (void *)((unsigned char *)node - tree->m_node_offset);
         }
     }
 }
 
 void *
-avl_rem(struct avl_tree *tree, int const key)
+avl_rem(avl_tree_t *const tree, int const key, void *const stack_buffer, size_t const buffer_size)
 {
-    struct astack l_stack = ASTACK_INIT;
-    struct astack *stack = &l_stack;
+    if (tree->m_size == 0) {
+        return NULL;
+    }
 
-    struct avl_node *node = tree->top;
+    astack_t l_stack = stack_init(stack_buffer, buffer_size);
+    astack_t *const stack = &l_stack;
+    if (l_stack.max_sz < avl_height(tree)) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    e_avl_node *node = tree->m_top;
     int const dive_rc = dive(node, stack, key);
-    if (dive_rc != 3) {
+    if (dive_rc != DFOUND) {
+        errno = ENOENT;
         return NULL;
     }
 
     // At this point, the stack contains an element with key
     // equal to `key`
-    node = stack_pop(stack);
+    e_avl_node *const to_remove = stack_pop(stack);
+    e_avl_node *const rem_parent = stack_peek(stack);
 
-    // Store the value to be returned, as well as the node
-    void *const out = node->elem;
-    struct avl_node *const candidate = node;
+    void *const out = (void *)((unsigned char *)to_remove - tree->m_node_offset);
 
-    // If the node is a leaf node, peek the parent,
-    // remove references to the candidate, and free the candidate.
-    if (node->lc == NULL && node->rc == NULL) {
-        node = stack_peek(stack);
-
-        // If there's no parent, the candidate is the last
-        // node.
-        if (node == NULL) {
-            CRASH_IF(stack->size > 0);
-            tree->top = NULL;
+    if (to_remove->lc == NULL && to_remove->rc == NULL) {
+        /* The node we are removing is a leaf node. Remove references to it */
+        if (rem_parent == NULL) {
+            tree->m_top = NULL;
         } else {
-            if (node->lc == candidate) {
-                node->lc = NULL;
-            } else if (node->rc == candidate) {
-                node->rc = NULL;
+            if (rem_parent->lc == to_remove) {
+                rem_parent->lc = NULL;
             } else {
-                CRASH_IF(true);
+                rem_parent->rc = NULL;
             }
         }
-        delete_node(candidate);
     } else {
-        // Push the node back onto the stack, because it will need
-        // to be balanced.
-        stack_push(stack, node);
+        /* Push the node we are removing onto the stack. We will replace it once
+         * we find a node */
+        stack_push(stack, to_remove);
 
-        // One of the child nodes is not NULL, find a child node
-        // to replace the candidate for deletion.
+        node = to_remove;
+
+        /* One of the child nodes is not NULL, find a child node to replace the
+         * candidate for deletion. */
         if (node->lc != NULL) {
+            /* Find the largest keyed child in the left subtree */
             node = node->lc;
-            // Find the largest left child
             for (;;) {
                 stack_push(stack, node);
                 if (node->rc == NULL) {
@@ -212,15 +252,15 @@ avl_rem(struct avl_tree *tree, int const key)
                 }
                 node = node->rc;
             }
-        } else if (node->rc != NULL) {
-            // Find the smallest right child
+        } else {
+            /* find the smallest keyed child in the right subtree */
             node = node->rc;
             stack_push(stack, node);
 
             // We do not loop and descend to try to find a better replacement
             // in this case.
 
-            CRASH_IF(node->lc != NULL);
+            assert(node->lc == NULL); // LCOV_EXCL_BR_LINE
             /* Node cannot have a left child because it would
              * create the illegal tree below.
              *
@@ -229,31 +269,33 @@ avl_rem(struct avl_tree *tree, int const key)
              *              b
              *             /
              *            c
-             * If `c` existed, then `a` would have a left child
-             * that would be preferred for replacement.
+             * If `c` existed and the tree was balanced, `a` would have a left
+             * child that would be preferred for replacement.
              */
-        } else {
-            CRASH_IF(true);
         }
 
-        // At this point, we found the node to replace the node that
-        // we're deleting, and every node along the path is on the stack.
-        struct avl_node *const new_cand = stack_pop(stack);
-        struct avl_node *const parent = stack_peek(stack);
+        /* At this point, we have found the node to replace the node that we're deleting.
+         * We have placed every node along that path onto our stack */
 
-        // Keep any children new_cand has.
-        if (new_cand->key < candidate->key) {
-            // new_cand is largest child in left sub-tree
-            // We know new_cand has no right children, because
-            // they would be larger than it.
-            if (parent->lc == new_cand) {
-                parent->lc = new_cand->lc;
+        e_avl_node *const replacement = stack_pop(stack);
+        e_avl_node *const replace_parent = stack_peek(stack);
+
+        /* make sure to keep children of replace_candidate */
+        if (replacement->key < to_remove->key) {
+            /* new_cand is largest child in left sub-tree of the node we are
+             * removing. We know new_cand has no right children, because they
+             * would be larger than it, and we would have preferred them */
+            if (replace_parent->lc == replacement) {
+                replace_parent->lc = replacement->lc;
             } else {
-                parent->rc = new_cand->lc;
+                replace_parent->rc = replacement->lc;
             }
+            assert(replacement->rc == NULL); // LCOV_EXCL_BR_LINE
 
         } else {
-            CRASH_IF(parent->lc == new_cand);
+            /* new_cand is the smallest child in the right sub-tree of the node
+             * we are removing */
+            assert(replacement != replace_parent->lc); // LCOV_EXCL_BR_LINE
             /* `new_cand` cannot be a left child,
              * because the tree below is illegal.
              *
@@ -262,22 +304,49 @@ avl_rem(struct avl_tree *tree, int const key)
              *              b
              *             /
              *            c
-             * If `new_cand` was the left child `c`,
-             * then `a` must have a left child, which
-             * would be preferred for replacement.
+             * If the candidate for replacement was the left child `c`, then
+             * `a` must have a left child, which would be preferred for
+             * replacement.
+             *
+             * similarly, the candidate for replacement cannot have a left
+             * child as it would be preferred for replacement
              */
-            parent->rc = new_cand->rc;
+            assert(replacement->lc == NULL); // LCOV_EXCL_BR_LINE
+            replace_parent->rc = replacement->rc;
         }
 
-        candidate->elem = new_cand->elem;
-        candidate->key = new_cand->key;
-        delete_node(new_cand);
+        /* swap out the node we are removing with the replacement candidate */
+        replacement->rc = to_remove->rc;
+        replacement->lc = to_remove->lc;
+        if (rem_parent == NULL) {
+            tree->m_top = replacement;
+        } else {
+            if (rem_parent->rc == to_remove) {
+                rem_parent->rc = replacement;
+            } else {
+                rem_parent->lc = replacement;
+            }
+        }
+
+        /* Find the placeholder we put on the stack and put our replacement there */
+        __attribute__((unused)) bool found = false;
+        for (int i = 0; i < stack->sz; ++i) {
+            if (stack->data[i] == to_remove) {
+                stack->data[i] = replacement;
+                found = true;
+                break;
+            }
+        }
+        assert(found); // LCOV_EXCL_BR_LINE
     }
+
+    /* Zero the node we removed */
+    *to_remove = (e_avl_node) {};
 
     rebalance(tree, stack);
 
-    tree->size--;
-    tree->gen++;
+    tree->m_size--;
+    tree->m_gen++;
 
     return out;
 }
@@ -285,7 +354,7 @@ avl_rem(struct avl_tree *tree, int const key)
 int
 avl_height(struct avl_tree const*const tree)
 {
-    return get_height(tree->top);
+    return get_height(tree->m_top);
 }
 
 /*
@@ -294,125 +363,113 @@ avl_height(struct avl_tree const*const tree)
  * `branch` is the pointer to `node` which must be updated.
  *
  */
-void
-rotate_right(struct avl_node **branch, struct avl_node *node)
+static inline void
+rotate_right(e_avl_node **const branch)
 {
-    CRASH_IF(*branch != node);
-    struct avl_node *const left = node->lc;
-    struct avl_node *const left_right = left->rc;
-    *branch = left;
-    node->lc = left_right;
-    left->rc = node;
-    update_height(node);
-    update_height(left);
+    /*
+     * Right Rotate around &R->rc
+     *
+     *        R                R
+     *       / \              / \
+     *      x   a            x   b
+     *         / \     ->       / \
+     *        b   c            d   a
+     *       / \                  / \
+     *      d   e                e   c
+     *
+     */
+    e_avl_node *const nd_a = *branch;
+    e_avl_node *const nd_b = nd_a->lc;
+    e_avl_node *const nd_e = nd_b->rc;
+
+    *branch = nd_b;
+    nd_b->rc = nd_a;
+    nd_a->lc = nd_e;
+
+    update_height(nd_a);
+    update_height(nd_b);
 }
 
-void
-rotate_left(struct avl_node **branch, struct avl_node *node)
+static inline void
+rotate_left(e_avl_node **const branch)
 {
-    CRASH_IF(*branch != node);
-    struct avl_node *const r = node->rc;
-    struct avl_node *const rl = r->lc;
-    *branch = r;
-    node->rc = rl;
-    r->lc = node;
-    update_height(node);
-    update_height(r);
-}
+    /*
+     * Left Rotate around &R->lc
+     *
+     *        R              R
+     *       / \            / \
+     *      a   x          c   x
+     *     / \       ->   / \
+     *    b   c          a   e
+     *       / \        / \
+     *      d   e      b   d
+     *
+     */
+    e_avl_node *const nd_a = *branch;
+    e_avl_node *const nd_c = nd_a->rc;
+    e_avl_node *const nd_d = nd_c->lc;
 
-/* Search down the tree structure, keeping track of our traversal
- * in the stack.
- * Return value is based on the value on the top of the stack.
- *
- * Cases 0-2 are used to indicate that the specified key doesn't exist in
- * the tree and where it may be inserted.
- *
- * 0 - Empty sub-tree, No node were added to the stack.
- * 1 - The left child of the node on the top of the stack is NULL
- * 2 - The right child of the node on the top of the stack is NULL
- * 3 - The node matches the `key`
- */
-static int
-dive(struct avl_node *node, struct astack *stk, int const key)
-{
-    if (node == NULL) {
-        return 0;
-    }
+    *branch = nd_c;
+    nd_c->lc = nd_a;
+    nd_a->rc = nd_d;
 
-    for (;;) {
-        stack_push(stk, node);
-        if (key < node->key) {
-            // If we find a NULL child, the node doesn't exist
-            if (node->lc == NULL) {
-                return 1;
-            } else {
-                node = node->lc;
-            }
-        } else if (key > node->key) {
-            // If we find a NULL child, the node doesn't exist
-            if (node->rc == NULL) {
-                return 2;
-            } else {
-                node = node->rc;
-            }
-        } else {
-            // We have found an element with key `key`
-            return 3;
-        }
-    }
+    update_height(nd_a);
+    update_height(nd_c);
 }
 
 static int
-rebalance(struct avl_tree *tree, struct astack *stk)
+rebalance(avl_tree_t *tree, struct astack *const p_stack)
 {
-    struct avl_node *node = stack_pop(stk);
-    // Traverse back up the tree, rebalancing and adjusting height
+    e_avl_node *node = stack_pop(p_stack);
+
+    /* Traverse back up the tree, rebalancing and adjusting height */
     while (node != NULL) {
 
         update_height(node);
-        enum avl_rotate_case const rot = find_case(node);
-        struct avl_node *parent = stack_peek(stk);
-        struct avl_node **branch = NULL;
-        struct avl_node **branch2 = NULL;
+        unsigned const rot = find_case(node);
+        e_avl_node *const parent = stack_peek(p_stack);
 
-        // Get a reference to the pivot point for rotation.
+        /* branch is the pivot point to rotate through:
+         *
+         *  ->  \                        \  <-
+         *       a                        b
+         *        \           ->         / \
+         *         b                    a   c
+         *          \
+         *           c
+         */
+        struct avl_node **branch = NULL;
+
+        /* Get a reference to the pivot point for rotation. */
         if (parent == NULL) {
-            branch = &tree->top;
+            branch = &tree->m_top;
         } else {
             if (node == parent->lc) {
                 branch = &parent->lc;
-            } else if (node == parent->rc) {
-                branch = &parent->rc;
             } else {
-                CRASH_IF(true);
+                branch = &parent->rc;
             }
         }
 
-        switch (rot) {
-        case BALANCED:
-            break;
-        case LEFT_LEFT:
-            rotate_right(branch, node);
-            break;
-        case LEFT_RIGHT:
-            branch2 = &node->lc;
-            rotate_left(branch2, *branch2);
-            rotate_right(branch, *branch);
-            break;
-        case RIGHT_RIGHT:
-            rotate_left(branch, node);
-            break;
-        case RIGHT_LEFT:
-            branch2 = &node->rc;
-            rotate_right(branch2, *branch2);
-            rotate_left(branch, *branch);
-            break;
-        default:
-            CRASH_IF(true);
-            break;
+        if (rot != ROT_BALANCED) {
+            if ((rot & ROT_FMASK) == ROT_FIRST_L) {
+                /* left subtree has greater height */
+
+                if (rot & ROT_SECND_R) {
+                    rotate_left(&node->lc);
+                }
+                rotate_right(branch);
+            } else {
+                /* right subtree has greater height */
+
+                if (rot & ROT_SECND_L) {
+                    rotate_right(&node->rc);
+                }
+                rotate_left(branch);
+            }
         }
 
-        node = stack_pop(stk);
+        node = stack_pop(p_stack);
     }
 
     return 0;
@@ -427,7 +484,7 @@ rebalance(struct avl_tree *tree, struct astack *stk)
 int
 avl_min_key(struct avl_tree const*const tree, int *key)
 {
-    struct avl_node *n = tree->top;
+    e_avl_node *n = tree->m_top;
     if (n == NULL) {
         return -1;
     }
@@ -450,7 +507,7 @@ avl_min_key(struct avl_tree const*const tree, int *key)
 int 
 avl_max_key(struct avl_tree const*const tree, int *key)
 {
-    struct avl_node *n = tree->top;
+    e_avl_node *n = tree->m_top;
     if (n == NULL) {
         return -1;
     }
