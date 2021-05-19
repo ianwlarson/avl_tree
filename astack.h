@@ -28,12 +28,10 @@ stack_init(void *const buffer, size_t const buffer_size)
     };
 }
 
-static inline int
+static inline void
 stack_push(astack_t *const p_stack, void *const p_entry)
 {
     p_stack->data[p_stack->sz++] = p_entry;
-
-    return 0;
 }
 
 
@@ -55,4 +53,3 @@ stack_peek(astack_t const*const p_stack)
     return p_stack->data[p_stack->sz - 1];
 }
 
-/* vim: set filetype=c: */
