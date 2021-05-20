@@ -14,16 +14,14 @@ typedef struct astack astack_t;
 
 struct astack {
     void **data;
-    size_t max_sz;
     size_t sz;
 };
 
 static inline astack_t
-stack_init(void *const buffer, size_t const buffer_size)
+stack_init(void *const buffer)
 {
     return (astack_t) {
         .data = buffer,
-        .max_sz = buffer_size / sizeof(void *),
         .sz = 0,
     };
 }

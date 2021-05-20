@@ -57,6 +57,13 @@ avl_node_height(e_avl_node const*const p_n)
 }
 
 __attribute__((pure))
+static inline int
+avl_height(avl_tree_t const*const tree)
+{
+    return avl_node_height(tree->m_top);
+}
+
+__attribute__((pure))
 static inline size_t
 avl_size(avl_tree_t const*const p_tree)
 {
@@ -328,14 +335,8 @@ avl_base_add(
     avl_tree_t *const tree,
     e_avl_node *const node,
     avlcmp_t const cmpfunc,
-    void *const stack_buffer,
-    size_t const buffer_size)
+    void *const stack_buffer)
 {
-    size_t const stack_elems = buffer_size / sizeof(void *);
-    if (stack_elems < avl_node_height(tree->m_top)) {
-        return (void *)(intptr_t)-1;
-    }
-
     node->lc = NULL;
     node->rc = NULL;
     node->height = 1;
@@ -344,7 +345,7 @@ avl_base_add(
         tree->m_top = node;
     } else {
 
-        astack_t l_stack = stack_init(stack_buffer, buffer_size);
+        astack_t l_stack = stack_init(stack_buffer);
         astack_t *const stack = &l_stack;
 
         // Find the point of insertion into the tree
@@ -406,7 +407,7 @@ avl_base_rem(
         return NULL;
     }
 
-    astack_t l_stack = stack_init(stack_buffer, 0);
+    astack_t l_stack = stack_init(stack_buffer);
     astack_t *const stack = &l_stack;
 
     e_avl_node *node = tree->m_top;

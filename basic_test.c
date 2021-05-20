@@ -61,7 +61,7 @@ static inline my_t *
 avl_my_add(avl_tree_t *const tree, my_t *const t)
 {
     void *stack[45];
-    e_avl_node *const o = avl_base_add(tree, &t->ok, mycmp, stack, sizeof(stack));
+    e_avl_node *const o = avl_base_add(tree, &t->ok, mycmp, stack);
     return (void *)((unsigned char *)o - offsetof(my_t, ok));
 }
 
@@ -139,13 +139,15 @@ verify_tree(avl_tree_t const*const tree, avlcmp_t const cmpfunc)
 int
 main(void)
 {
-    //unsigned rng = time(NULL);
-    unsigned rng = 0xdeadbeefu;
+    unsigned rng = time(NULL);
+    //unsigned rng = 0xdeadbeefu;
 
     avl_tree_t tree = avl_tree_init();
 
-    for (int i = 0; i < 1000; ++i) {
-        int const key = (int)(xorshift32(&rng) & 0xffu);
+    int max_h = 0;
+    size_t max_sz = 0;
+    for (int i = 0; i < 2000000; ++i) {
+        int const key = (int)(xorshift32(&rng) & 0xffffffu);
         if (avl_my_get(&tree, key) == NULL) {
             my_t *const m = malloc(sizeof(*m));
             m->my_key = key;
@@ -158,7 +160,15 @@ main(void)
             free(avl_my_rem(&tree, key));
         }
         //verify_tree(&tree, mycmp);
+        if (avl_height(&tree) > max_h) {
+            max_h = avl_height(&tree);
+        }
+        if (avl_size(&tree) > max_sz) {
+            max_sz = avl_size(&tree);
+        }
     }
+    printf("Max height was %d\n", max_h);
+    printf("Max size was %zu\n", max_sz);
 
     return 0;
 }
