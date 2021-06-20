@@ -96,7 +96,7 @@ avl_my_rem(avl_tree_t *const tree, int const key)
 }
 
 #define NUM_LOOPS 1000000
-#define NUM_OBJS 10000
+#define NUM_OBJS 30
 
 int
 main(void)
@@ -118,6 +118,8 @@ main(void)
     uint64_t add_ns = 0;
     uint64_t rem_ns = 0;
 
+    uint64_t overhead_ns = 0;
+
     for (int i = 0; i < NUM_OBJS; ++i) {
         // Put all the objects into the tree
         my_t *a = avl_my_add(&tree, &objs[i]);
@@ -126,6 +128,15 @@ main(void)
             a = avl_my_add(&tree, &objs[i]);
         }
     }
+
+    for (int i = 0; i < NUM_LOOPS; ++i) {
+        clock_gettime(CLOCK_REALTIME, &start);
+        clock_gettime(CLOCK_REALTIME, &end);
+        overhead_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
+    }
+
+    double const overhead = 1.0 * overhead_ns / NUM_LOOPS;
+    printf("Overhead is %f nanoseconds\n", overhead);
 
     for (int i = 0; i < NUM_LOOPS; ++i) {
         unsigned const idx = xorshift32(&rng) % NUM_OBJS;
@@ -157,10 +168,10 @@ main(void)
     }
 
     printf("Ran test with a tree of size %d\n", NUM_OBJS);
-    printf("Average time to get a node(uncached): %f nanoseconds\n", 1.0 * get_uncached_ns / (1.0 * NUM_LOOPS) );
-    printf("Average time to get a node: %f nanoseconds\n", 1.0 * get_ns / (1.0 * NUM_LOOPS) );
-    printf("Average time to add a node: %f nanoseconds\n", 1.0 * add_ns / (1.0 * NUM_LOOPS) );
-    printf("Average time to remove a node: %f nanoseconds\n", 1.0 * rem_ns / (1.0 * NUM_LOOPS) );
+    printf("Average time to get a node(uncached): %f nanoseconds\n", 1.0 * get_uncached_ns / (1.0 * NUM_LOOPS) - overhead);
+    printf("Average time to get a node: %f nanoseconds\n", 1.0 * get_ns / (1.0 * NUM_LOOPS) - overhead);
+    printf("Average time to add a node: %f nanoseconds\n", 1.0 * add_ns / (1.0 * NUM_LOOPS) - overhead);
+    printf("Average time to remove a node: %f nanoseconds\n", 1.0 * rem_ns / (1.0 * NUM_LOOPS) - overhead);
 
     free(objs);
 
