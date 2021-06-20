@@ -1,52 +1,32 @@
 
-# AVL Tree
-
-An AVL tree is a flavour of _Rank-Balanced Binary Search Trees_.
-It is more rigidly balanced than a Red-Black tree, but indeed every AVL tree may be
-coloured red-black.
-
-An AVL tree has an advantage over a Red-Black tree for use cases where insertions
-and deletions are infrequent relative to number of element access.
-
-## Implementation
-
-### Details
-This particular tree is implemented without using recursion or parent pointers
-in the node structures. In order to do this, a buffer must be passed to the
-functions to use as a stack when traversing the tree.
-
-This makes the API slightly more awkward, but in reality it's trivial to allocate a sufficiently
-large buffer for any reasonably sized tree.
-
-The benefits are enourmous:
-1. The per-node memory cost is reduced by a pointer as no parent pointer is
-   required.
-2. The constant cost of updating is reduced as there is 33% less pointers to
-   update when rebalancing.
-
-### Example Usage
-
-Let's create a custom avl tree for an object type:
-
-```c
-#pragma once
+#include <stdio.h>
+#include <assert.h>
+#include <time.h>
 
 #include "avl.h"
 
-// Define the base type that contains an embedded node
+static inline unsigned
+xorshift32(unsigned *const p_rng)
+{
+    unsigned x = *p_rng;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *p_rng = x;
+    return x;
+}
+
 typedef struct my_type my_t;
 struct my_type {
     e_avl_node ok;
     int my_key;
 };
 
-// Define a key type that can be used to locate entries in the tree
 typedef struct my_key_type myk_t;
 struct my_key_type {
     int my_key;
 };
 
-// Define a static inline pure function that compares two nodes
 __attribute__((pure))
 static inline int
 mycmp(e_avl_node const*const ln, e_avl_node const*const rn)
@@ -62,7 +42,6 @@ mycmp(e_avl_node const*const ln, e_avl_node const*const rn)
     }
 }
 
-// Define a static inline pure function that compares a key and a node
 __attribute__((pure))
 static inline int
 mykeycmp(void const*const key, e_avl_node const*const rn)
@@ -78,9 +57,6 @@ mykeycmp(void const*const key, e_avl_node const*const rn)
     }
 }
 
-// Define a function that wraps the `avl_base_add` api by handling the
-// converting the object type (strongly typed) to the inner node, as well
-// as providing the comparison function and stack.
 static inline my_t *
 avl_my_add(avl_tree_t *const tree, my_t *const t)
 {
@@ -89,9 +65,6 @@ avl_my_add(avl_tree_t *const tree, my_t *const t)
     return (void *)((unsigned char *)o - offsetof(my_t, ok));
 }
 
-// Define a function that wraps `avl_base_get` by constructing a key object
-// and passing in the key comparison function.
-__attribute__((pure))
 static inline my_t *
 avl_my_get(avl_tree_t const*const tree, int const key)
 {
@@ -106,8 +79,6 @@ avl_my_get(avl_tree_t const*const tree, int const key)
     }
 }
 
-// Define a function that wraps `avl_base_rem` by constructing a key object,
-// then providing the comparison function and the stack.
 static inline my_t *
 avl_my_rem(avl_tree_t *const tree, int const key)
 {
@@ -122,4 +93,46 @@ avl_my_rem(avl_tree_t *const tree, int const key)
         return (void *)((unsigned char *)o - offsetof(my_t, ok));
     }
 }
-```
+
+#define NUM_OBJS 100
+
+int
+main(void)
+{
+    //unsigned rng = time(NULL);
+    unsigned rng = 0xdeadbeefu;
+
+    avl_tree_t tree = avl_tree_init();
+
+    my_t *objs = malloc(sizeof(*objs) * NUM_OBJS);
+    for (int i = 0; i < NUM_OBJS; ++i) {
+        // Randomly put a non-negative key in all the objects
+        objs[i].my_key = (int)(xorshift32(&rng) & 0xefffffffu);
+    }
+
+    struct timespec start, end;
+    uint64_t ns;
+
+    for (int j = 0; j < 100; ++j) {
+        clock_gettime(CLOCK_REALTIME, &start);
+        for (int i = 0; i < NUM_OBJS; ++i) {
+            avl_my_add(&tree, &objs[i]);
+        }
+        clock_gettime(CLOCK_REALTIME, &end);
+        ns = (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
+        printf("Average time to add: %f nanoseconds\n", 1.0 * ns / NUM_OBJS);
+        clock_gettime(CLOCK_REALTIME, &start);
+        for (int i = 0; i < NUM_OBJS; ++i) {
+            avl_my_rem(&tree, objs[i].my_key);
+        }
+        assert(avl_size(&tree) == 0);
+        clock_gettime(CLOCK_REALTIME, &end);
+        ns = (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
+        printf("Average time to remove: %f nanoseconds\n", 1.0 * ns / NUM_OBJS);
+    }
+    printf("elapsed time %lu\n", ns);
+
+    free(objs);
+
+    return 0;
+}
