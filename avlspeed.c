@@ -95,14 +95,17 @@ avl_my_rem(avl_tree_t *const tree, int const key)
     }
 }
 
-#define NUM_LOOPS 1000000
-#define NUM_OBJS 30
+#define NUM_LOOPS 100000
+#define NUM_OBJS (1<<14)
+#define NUM_INNER_LOOP 100
 
 int
 main(void)
 {
-    //unsigned rng = time(NULL);
-    unsigned rng = 0xdeadbeefu;
+    printf("NUM_OBJS %d\n", NUM_OBJS);
+    printf("NUM_INNER_LOOP %d\n", NUM_INNER_LOOP);
+    unsigned rng = time(NULL);
+    //unsigned rng = 0xdeadbeefu;
 
     avl_tree_t tree = avl_tree_init();
 
@@ -114,11 +117,9 @@ main(void)
 
     struct timespec start, end;
     uint64_t get_ns = 0;
-    uint64_t get_uncached_ns = 0;
     uint64_t add_ns = 0;
     uint64_t rem_ns = 0;
 
-    uint64_t overhead_ns = 0;
 
     for (int i = 0; i < NUM_OBJS; ++i) {
         // Put all the objects into the tree
@@ -129,51 +130,49 @@ main(void)
         }
     }
 
-    for (int i = 0; i < NUM_LOOPS; ++i) {
-        clock_gettime(CLOCK_REALTIME, &start);
-        clock_gettime(CLOCK_REALTIME, &end);
-        overhead_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
-    }
-
-    double const overhead = 1.0 * overhead_ns / NUM_LOOPS;
-    printf("Overhead is %f nanoseconds\n", overhead);
+    my_t **ptrs = malloc(sizeof(*ptrs) * NUM_INNER_LOOP);
 
     for (int i = 0; i < NUM_LOOPS; ++i) {
-        unsigned const idx = xorshift32(&rng) % NUM_OBJS;
         clock_gettime(CLOCK_REALTIME, &start);
-        my_t *g = avl_my_get(&tree, objs[idx].my_key);
+        for (int j = 0; j < NUM_INNER_LOOP; ++j) {
+            unsigned const idx = xorshift32(&rng) % NUM_OBJS;
+            my_t *g = avl_my_get(&tree, objs[idx].my_key);
+            assert(g == &objs[idx]);
+        }
         clock_gettime(CLOCK_REALTIME, &end);
 
-        assert(g == &objs[idx]);
-        get_uncached_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
-
-        clock_gettime(CLOCK_REALTIME, &start);
-        g = avl_my_get(&tree, objs[idx].my_key);
-        clock_gettime(CLOCK_REALTIME, &end);
-
-        assert(g == &objs[idx]);
         get_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
 
         clock_gettime(CLOCK_REALTIME, &start);
-        my_t *const e = avl_my_rem(&tree, objs[idx].my_key);
+        unsigned const start_idx = xorshift32(&rng) % NUM_OBJS;
+        for (int j = 0; j < NUM_INNER_LOOP; ++j) {
+            unsigned const idx = (start_idx + j) % NUM_OBJS;
+            my_t *const e = avl_my_rem(&tree, objs[idx].my_key);
+            assert(e == &objs[idx]);
+            ptrs[j] = e;
+        }
         clock_gettime(CLOCK_REALTIME, &end);
 
-        assert(e == &objs[idx]);
         rem_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
 
         clock_gettime(CLOCK_REALTIME, &start);
-        avl_my_add(&tree, &objs[idx]);
+        for (int j = 0; j < NUM_INNER_LOOP; ++j) {
+            unsigned const idx = (start_idx + j) % NUM_OBJS;
+            my_t *const e = avl_my_add(&tree, ptrs[j]);
+            assert(e == &objs[idx]);
+        }
         clock_gettime(CLOCK_REALTIME, &end);
         add_ns += (end.tv_sec - start.tv_sec)*UINT64_C(1000000000) + (end.tv_nsec - start.tv_nsec);
     }
 
+    double const divisor = 1.0 * NUM_LOOPS * NUM_INNER_LOOP;
     printf("Ran test with a tree of size %d\n", NUM_OBJS);
-    printf("Average time to get a node(uncached): %f nanoseconds\n", 1.0 * get_uncached_ns / (1.0 * NUM_LOOPS) - overhead);
-    printf("Average time to get a node: %f nanoseconds\n", 1.0 * get_ns / (1.0 * NUM_LOOPS) - overhead);
-    printf("Average time to add a node: %f nanoseconds\n", 1.0 * add_ns / (1.0 * NUM_LOOPS) - overhead);
-    printf("Average time to remove a node: %f nanoseconds\n", 1.0 * rem_ns / (1.0 * NUM_LOOPS) - overhead);
+    printf("Average time to get a node: %f nanoseconds\n", 1.0 * get_ns / divisor);
+    printf("Average time to add a node: %f nanoseconds\n", 1.0 * add_ns / divisor);
+    printf("Average time to remove a node: %f nanoseconds\n", 1.0 * rem_ns / divisor);
 
     free(objs);
+    free(ptrs);
 
     return 0;
 }
