@@ -1,10 +1,15 @@
-#pragma once
+
+#ifndef INLINE_AVL_H
+#define INLINE_AVL_H
 
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <assert.h>
+
+#ifndef assert
+#define assert(x)
+#endif
 
 /*
  * Stack structure for allowing tree searching/backtracking.
@@ -601,3 +606,5 @@ avl_base_rem(
 
     return to_remove;
 }
+
+#endif /* INLINE_AVL_H */

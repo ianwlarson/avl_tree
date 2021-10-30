@@ -29,9 +29,7 @@ The benefits are enourmous:
 Let's create a custom avl tree for an object type:
 
 ```c
-#pragma once
-
-#include "avl.h"
+#include "inline_avl.h"
 
 // Define the base type that contains an embedded node
 typedef struct my_type my_t;
@@ -81,6 +79,7 @@ mykeycmp(void const*const key, e_avl_node const*const rn)
 // Define a function that wraps the `avl_base_add` api by handling the
 // converting the object type (strongly typed) to the inner node, as well
 // as providing the comparison function and stack.
+__attribute__((flatten))
 static inline my_t *
 avl_my_add(avl_tree_t *const tree, my_t *const t)
 {
@@ -91,7 +90,7 @@ avl_my_add(avl_tree_t *const tree, my_t *const t)
 
 // Define a function that wraps `avl_base_get` by constructing a key object
 // and passing in the key comparison function.
-__attribute__((pure))
+__attribute__((pure,flatten))
 static inline my_t *
 avl_my_get(avl_tree_t const*const tree, int const key)
 {
@@ -108,6 +107,7 @@ avl_my_get(avl_tree_t const*const tree, int const key)
 
 // Define a function that wraps `avl_base_rem` by constructing a key object,
 // then providing the comparison function and the stack.
+__attribute__((flatten))
 static inline my_t *
 avl_my_rem(avl_tree_t *const tree, int const key)
 {

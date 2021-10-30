@@ -6,8 +6,8 @@ CFLAGS=-Ofast -Wall -std=gnu11
 
 all: avlspeed
 
-avlspeed: avlspeed.c | avl.h
-	$(CC) $(CFLAGS) $^ -I. -o $@
+avlspeed: avlspeed.c inline_avl.h
+	$(CC) $(CFLAGS) $(filter %.c,$^) -I. -o $@
 
 clean:
 	rm -f *.o avlspeed

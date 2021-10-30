@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <time.h>
 
-#include "avl.h"
+#include "inline_avl.h"
 
 static inline unsigned
 xorshift32(unsigned *const p_rng)
@@ -58,6 +58,7 @@ mykeycmp(void const*const key, e_avl_node const*const rn)
     }
 }
 
+__attribute__((flatten))
 static inline my_t *
 avl_my_add(avl_tree_t *const tree, my_t *const t)
 {
@@ -66,6 +67,7 @@ avl_my_add(avl_tree_t *const tree, my_t *const t)
     return (void *)((unsigned char *)o - offsetof(my_t, ok));
 }
 
+__attribute__((flatten))
 static inline my_t *
 avl_my_get(avl_tree_t const*const tree, int const key)
 {
@@ -80,6 +82,7 @@ avl_my_get(avl_tree_t const*const tree, int const key)
     }
 }
 
+__attribute__((flatten))
 static inline my_t *
 avl_my_rem(avl_tree_t *const tree, int const key)
 {
@@ -96,7 +99,7 @@ avl_my_rem(avl_tree_t *const tree, int const key)
 }
 
 #define NUM_LOOPS 100000
-#define NUM_OBJS (1<<14)
+#define NUM_OBJS (1<<17)
 #define NUM_INNER_LOOP 100
 
 int
