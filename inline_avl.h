@@ -34,10 +34,13 @@ stack_init(void *const buffer)
     };
 }
 
-static inline void
+__attribute__((always_inline))
+static inline void **
 stack_push(astack_t *const p_stack, void *const p_entry)
 {
-    p_stack->data[p_stack->sz++] = p_entry;
+    void **const o = &p_stack->data[p_stack->sz++];
+    *o = p_entry;
+    return o;
 }
 
 
@@ -148,7 +151,7 @@ dive(
 {
     int status = DERROR;
     for (;;) {
-        stack_push(p_stack, p_nd);
+        (void)stack_push(p_stack, p_nd);
 
         int const lcmp = cmpfunc(lhs, p_nd);
         if (lcmp < 0) {
@@ -185,7 +188,7 @@ divek(
 {
     int status = DERROR;
     for (;;) {
-        stack_push(p_stack, p_nd);
+        (void)stack_push(p_stack, p_nd);
 
         int const lcmp = cmpfunc(lhs, p_nd);
         if (lcmp < 0) {
@@ -485,9 +488,9 @@ avl_base_rem(
             }
         }
     } else {
-        /* Push the node we are removing onto the stack. We will replace it once
-         * we find a node */
-        stack_push(stack, to_remove);
+        /* Push the node we are removing onto the stack. We will replace it
+         * once we find a node */
+        void **const rem_stack_ptr = stack_push(stack, to_remove);
 
         node = to_remove;
         int replace_case = DERROR;
@@ -498,7 +501,7 @@ avl_base_rem(
             /* Find the largest keyed child in the left subtree */
             node = node->lc;
             for (;;) {
-                stack_push(stack, node);
+                (void)stack_push(stack, node);
                 if (node->rc == NULL) {
                     break;
                 }
@@ -508,7 +511,7 @@ avl_base_rem(
         } else {
             /* find the smallest keyed child in the right subtree */
             node = node->rc;
-            stack_push(stack, node);
+            (void)stack_push(stack, node);
 
             // We do not loop and descend to try to find a better replacement
             // in this case.
@@ -582,16 +585,8 @@ avl_base_rem(
             }
         }
 
-        /* Find the placeholder we put on the stack and put our replacement there */
-        __attribute__((unused)) bool found = false;
-        for (int i = 0; i < stack->sz; ++i) {
-            if (stack->data[i] == to_remove) {
-                stack->data[i] = replacement;
-                found = true;
-                break;
-            }
-        }
-        assert(found); // LCOV_EXCL_BR_LINE
+        /* Replace the element in the stack with the ptr */
+        *rem_stack_ptr = replacement;
     }
 
     /* Zero some fields of the node we removed */
