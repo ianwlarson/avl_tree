@@ -129,7 +129,6 @@ avl_size(avl_tree_t const*const p_tree)
 #define DFOUND  0
 #define DLEFT   1
 #define DRIGHT  2
-#define DERROR  3
 
 /* Search down the tree structure, keeping track of our traversal
  * in the stack.
@@ -149,34 +148,27 @@ dive(
     avlcmp_t const cmpfunc,
     astack_t *const p_stack)
 {
-    int status = DERROR;
     for (;;) {
         (void)stack_push(p_stack, p_nd);
 
         int const lcmp = cmpfunc(lhs, p_nd);
         if (lcmp < 0) {
             if (p_nd->lc == NULL) {
-                status = DLEFT;
-                break;
+                return DLEFT;
             } else {
                 p_nd = p_nd->lc;
             }
         } else if (lcmp > 0) {
             if (p_nd->rc == NULL) {
-                status = DRIGHT;
-                break;
+                return DRIGHT;
             } else {
                 p_nd = p_nd->rc;
             }
         } else {
             // We found a matching element
-            status = DFOUND;
-            break;
+            return DFOUND;
         }
     }
-    assert(status != DERROR); // LCOV_EXCL_BR_LINE
-
-    return status;
 }
 
 static inline int
@@ -186,34 +178,27 @@ divek(
     avlkeycmp_t const cmpfunc,
     astack_t *const p_stack)
 {
-    int status = DERROR;
     for (;;) {
         (void)stack_push(p_stack, p_nd);
 
         int const lcmp = cmpfunc(lhs, p_nd);
         if (lcmp < 0) {
             if (p_nd->lc == NULL) {
-                status = DLEFT;
-                break;
+                return DLEFT;
             } else {
                 p_nd = p_nd->lc;
             }
         } else if (lcmp > 0) {
             if (p_nd->rc == NULL) {
-                status = DRIGHT;
-                break;
+                return DRIGHT;
             } else {
                 p_nd = p_nd->rc;
             }
         } else {
             // We have found an element with key `key`
-            status = DFOUND;
-            break;
+            return DFOUND;
         }
     }
-    assert(status != DERROR); // LCOV_EXCL_BR_LINE
-
-    return status;
 }
 
 
@@ -493,7 +478,7 @@ avl_base_rem(
         void **const rem_stack_ptr = stack_push(stack, to_remove);
 
         node = to_remove;
-        int replace_case = DERROR;
+        int const replace_case = (node->lc == NULL) ? DRIGHT : DLEFT;
 
         /* One of the child nodes is not NULL, find a child node to replace the
          * candidate for deletion. */
@@ -507,7 +492,6 @@ avl_base_rem(
                 }
                 node = node->rc;
             }
-            replace_case = DLEFT;
         } else {
             /* find the smallest keyed child in the right subtree */
             node = node->rc;
@@ -528,7 +512,6 @@ avl_base_rem(
              * If `c` existed and the tree was balanced, `a` would have a left
              * child that would be preferred for replacement.
              */
-            replace_case = DRIGHT;
         }
 
         /* At this point, we have found the node to replace the node that we're deleting.
