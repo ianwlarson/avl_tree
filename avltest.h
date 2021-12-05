@@ -28,13 +28,9 @@ KEY(my_t const*const m)
 }
 
 static inline int
-BF(my_t *const m)
+BF(my_t const*const m)
 {
-    my_t const*const l = leftc(m);
-    my_t const*const r = rightc(m);
-    int const lh = (l == NULL) ? 0 : l->ok.height;
-    int const rh = (r == NULL) ? 0 : r->ok.height;
-    return rh - lh;
+    return m->ok.bf;
 }
 
 static inline my_t *

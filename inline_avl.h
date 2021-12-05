@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #ifndef assert
 #define assert(x)
@@ -21,23 +22,23 @@
 typedef struct astack astack_t;
 
 struct astack {
-    void **data;
     size_t sz;
+    void *data[];
 };
 
-static inline astack_t
+static inline astack_t*
 stack_init(void *const buffer)
 {
-    return (astack_t) {
-        .data = buffer,
-        .sz = 0,
-    };
+    astack_t *const o = buffer;
+    o->sz = 0;
+    return o;
 }
 
 __attribute__((always_inline))
 static inline void **
 stack_push(astack_t *const p_stack, void *const p_entry)
 {
+    assert(p_stack->sz <= 40);
     void **const o = &p_stack->data[p_stack->sz++];
     *o = p_entry;
     return o;
@@ -69,7 +70,7 @@ typedef struct avl_node e_avl_node;
 struct avl_node {
     e_avl_node *lc;
     e_avl_node *rc;
-    int height;
+    int bf;
 #if UINTPTR_MAX == 0xffffffffffffffffull
     // It's sort of pointless to include this but it's good to be explicit that
     // this field will be present. The implementation doesn't touch it so it
@@ -101,122 +102,12 @@ avl_tree_init(void)
 }
 
 __attribute__((pure))
-static inline int
-avl_node_height(e_avl_node const*const p_n)
-{
-    if (p_n == NULL) {
-        return 0;
-    }
-
-    return p_n->height;
-}
-
-__attribute__((pure))
-static inline int
-avl_height(avl_tree_t const*const tree)
-{
-    return avl_node_height(tree->m_top);
-}
-
-__attribute__((pure))
 static inline size_t
 avl_size(avl_tree_t const*const p_tree)
 {
     return p_tree->m_size;
 }
 
-
-#define DFOUND  0
-#define DLEFT   1
-#define DRIGHT  2
-
-/* Search down the tree structure, keeping track of our traversal
- * in the stack.
- * Return value is based on the value on the top of the stack.
- *
- * - Cases where the node doesn't exist in the tree
- *   DLEFT  - The left child of the node on the top of the stack is NULL
- *   DRIGHT - The right child of the node on the top of the stack is NULL
- *
- * - Cases where the node is found
- *   DFOUND - A node with a matching key was found in the tree
- */
-static inline int
-dive(
-    e_avl_node *p_nd,
-    e_avl_node const*const lhs,
-    avlcmp_t const cmpfunc,
-    astack_t *const p_stack)
-{
-    for (;;) {
-        (void)stack_push(p_stack, p_nd);
-
-        int const lcmp = cmpfunc(lhs, p_nd);
-        if (lcmp < 0) {
-            if (p_nd->lc == NULL) {
-                return DLEFT;
-            } else {
-                p_nd = p_nd->lc;
-            }
-        } else if (lcmp > 0) {
-            if (p_nd->rc == NULL) {
-                return DRIGHT;
-            } else {
-                p_nd = p_nd->rc;
-            }
-        } else {
-            // We found a matching element
-            return DFOUND;
-        }
-    }
-}
-
-static inline int
-divek(
-    e_avl_node *p_nd,
-    void const*const lhs,
-    avlkeycmp_t const cmpfunc,
-    astack_t *const p_stack)
-{
-    for (;;) {
-        (void)stack_push(p_stack, p_nd);
-
-        int const lcmp = cmpfunc(lhs, p_nd);
-        if (lcmp < 0) {
-            if (p_nd->lc == NULL) {
-                return DLEFT;
-            } else {
-                p_nd = p_nd->lc;
-            }
-        } else if (lcmp > 0) {
-            if (p_nd->rc == NULL) {
-                return DRIGHT;
-            } else {
-                p_nd = p_nd->rc;
-            }
-        } else {
-            // We have found an element with key `key`
-            return DFOUND;
-        }
-    }
-}
-
-
-static inline void
-update_height(struct avl_node *const node)
-{
-    int const height_lc = avl_node_height(node->lc);
-    int const height_rc = avl_node_height(node->rc);
-    int const maxheight = (height_rc > height_lc) ? height_rc : height_lc;
-    node->height = 1 + maxheight;
-}
-
-/*
- * Apply a rotation around pivot point `node`
- *
- * `branch` is the pointer to `node` which must be updated.
- *
- */
 static inline void
 rotate_right(e_avl_node **const branch)
 {
@@ -239,9 +130,6 @@ rotate_right(e_avl_node **const branch)
     *branch = nd_b;
     nd_b->rc = nd_a;
     nd_a->lc = nd_e;
-
-    update_height(nd_a);
-    update_height(nd_b);
 }
 
 static inline void
@@ -266,107 +154,6 @@ rotate_left(e_avl_node **const branch)
     *branch = nd_c;
     nd_c->lc = nd_a;
     nd_a->rc = nd_d;
-
-    update_height(nd_a);
-    update_height(nd_c);
-}
-
-
-#define ROT_BALANCED  0x00000000u
-#define ROT_FIRST_L   0x00000001u
-#define ROT_FIRST_R   0x00000002u
-#define ROT_FMASK     (ROT_FIRST_L | ROT_FIRST_R)
-#define ROT_SECND_L   0x00000004u
-#define ROT_SECND_R   0x00000008u
-
-__attribute__((pure))
-static inline unsigned
-find_case(e_avl_node const*const node)
-{
-    int const height_rc = avl_node_height(node->rc);
-    int const height_lc = avl_node_height(node->lc);
-
-    int const balance = height_rc - height_lc;
-
-    unsigned rot_case = ROT_BALANCED;
-
-    if (balance < -1 || balance > 1) {
-        if (height_lc > height_rc) {
-            rot_case |= ROT_FIRST_L;
-
-            e_avl_node const*const child = node->lc;
-
-            if (avl_node_height(child->lc) < avl_node_height(child->rc)) {
-                rot_case |= ROT_SECND_R;
-            }
-        } else {
-            rot_case |= ROT_FIRST_R;
-
-            e_avl_node const*const child = node->rc;
-
-            if (avl_node_height(child->lc) > avl_node_height(child->rc)) {
-                rot_case |= ROT_SECND_L;
-            }
-        }
-    }
-
-    return rot_case;
-}
-
-static inline void
-rebalance(avl_tree_t *const tree, struct astack *const p_stack)
-{
-    e_avl_node *node = stack_pop(p_stack);
-
-    /* Traverse back up the tree, rebalancing and adjusting height */
-    while (node != NULL) {
-
-        update_height(node);
-        unsigned const rot = find_case(node);
-        e_avl_node *const parent = stack_peek(p_stack);
-
-        /* branch is the pivot point to rotate through:
-         *
-         *  ->  \                        \  <-
-         *       a                        b
-         *        \           ->         / \
-         *         b                    a   c
-         *          \
-         *           c
-         */
-        struct avl_node **branch = NULL;
-
-        /* Get a reference to the pivot point for rotation. */
-        if (parent == NULL) {
-            branch = &tree->m_top;
-        } else {
-            if (node == parent->lc) {
-                branch = &parent->lc;
-            } else {
-                branch = &parent->rc;
-            }
-        }
-
-        if (rot != ROT_BALANCED) {
-            if ((rot & ROT_FMASK) == ROT_FIRST_L) {
-                /* left subtree has greater height */
-
-                if (rot & ROT_SECND_R) {
-                    rotate_left(&node->lc);
-                }
-                rotate_right(branch);
-            } else {
-                /* right subtree has greater height */
-
-                if (rot & ROT_SECND_L) {
-                    rotate_right(&node->rc);
-                }
-                rotate_left(branch);
-            }
-        }
-
-        node = stack_pop(p_stack);
-    }
 }
 
 // Mutate functions
@@ -379,36 +166,142 @@ avl_base_add(
 {
     node->lc = NULL;
     node->rc = NULL;
-    node->height = 1;
+    node->bf = 0;
 
+    // Exit early for the unlikely size == 0 case
     if (tree->m_size == 0) {
         tree->m_top = node;
-    } else {
+        ++tree->m_size;
+        ++tree->m_gen;
+        return node;
+    }
 
-        astack_t l_stack = stack_init(stack_buffer);
-        astack_t *const stack = &l_stack;
+    astack_t *const stack = stack_init(stack_buffer);
 
-        // Find the point of insertion into the tree
-        int const rc = dive(tree->m_top, node, cmpfunc, stack);
+    // Find the point of insertion into the tree
+    e_avl_node *cursor = tree->m_top;
 
-        e_avl_node *const parent = stack_peek(stack);
-        if (rc == DLEFT) {
-            parent->lc = node;
-        } else if (rc == DRIGHT) {
-            parent->rc = node;
+    for (;;) {
+        (void)stack_push(stack, cursor);
+
+        int const lcmp = cmpfunc(node, cursor);
+        if (lcmp < 0) {
+            if (cursor->lc == NULL) {
+                cursor->lc = node;
+                cursor->bf--;
+                break;
+            } else {
+                cursor = cursor->lc;
+            }
+        } else if (lcmp > 0) {
+            if (cursor->rc == NULL) {
+                cursor->rc = node;
+                cursor->bf++;
+                break;
+            } else {
+                cursor = cursor->rc;
+            }
         } else {
-            // We found a node that matches exactly
-            return parent;
+            return cursor;
         }
-
-        rebalance(tree, stack);
     }
 
     ++tree->m_size;
     ++tree->m_gen;
 
-    return node;
+    // At this point, node has been added to the tree and every node along the
+    // way is on the stack.
+    e_avl_node *z = node;
+    e_avl_node *x = stack_pop(stack);
+    for (;;) {
+        assert(x != NULL);
 
+        if (x->bf == 2 || x->bf == -2) {
+            // The node was made unbalanced! It can be balanced by rotation,
+            // then we're done!
+            e_avl_node **branch = &tree->m_top;
+            e_avl_node *y = stack_peek(stack);
+            if (y != NULL) {
+                branch = (y->rc == x) ? &y->rc : &y->lc;
+            }
+
+            if (x->rc == z) {
+                if (z->bf < 0) {
+                    // c's left child goes to x, right child goes to z
+                    e_avl_node *const c = z->lc;
+                    rotate_right(&x->rc);
+                    rotate_left(branch);
+
+                    if (c->bf == 0) {
+                        z->bf = 0;
+                        x->bf = 0;
+                    } else if (c->bf == -1) {
+                        // left child was higher
+                        x->bf = 0;
+                        z->bf = 1;
+                    } else {
+                        // right child was higher
+                        assert(c->bf == 1);
+                        x->bf = -1;
+                        z->bf = 0;
+                    }
+
+                    c->bf = 0;
+                } else {
+                    rotate_left(branch);
+
+                    z->bf = 0;
+                    x->bf = 0;
+                }
+            } else {
+                if (z->bf > 0) {
+                    // c's left child goes to z, right child goes to x
+                    e_avl_node *const c = z->rc;
+                    rotate_left(&x->lc);
+                    rotate_right(branch);
+
+                    if (c->bf == 0) {
+                        z->bf = 0;
+                        x->bf = 0;
+                    } else if (c->bf == -1) {
+                        // left child was higher
+                        x->bf = 1;
+                        z->bf = 0;
+                    } else {
+                        // right child was higher
+                        assert(c->bf == 1);
+                        x->bf = 0;
+                        z->bf = -1;
+                    }
+
+                    c->bf = 0;
+                } else {
+                    rotate_right(branch);
+
+                    z->bf = 0;
+                    x->bf = 0;
+                }
+            }
+
+            break;
+        } else if (x->bf == 0) {
+            // The change in height was absorbed! We're done!
+            break;
+        } else {
+            // Our balance has become 1 or -1, we must continue up the tree.
+            z = x;
+            x = stack_pop(stack);
+            if (x == NULL) break;
+
+            if (x->rc == z) {
+                x->bf++;
+            } else {
+                x->bf--;
+            }
+        }
+    }
+
+    return node;
 }
 
 // Gets the pointer associated with a key.
@@ -447,60 +340,100 @@ avl_base_rem(
         return NULL;
     }
 
-    astack_t l_stack = stack_init(stack_buffer);
-    astack_t *const stack = &l_stack;
+    astack_t *const stack = stack_init(stack_buffer);
 
-    e_avl_node *node = tree->m_top;
-    int const dive_rc = divek(node, key, cmpfunc, stack);
-    if (dive_rc != DFOUND) {
-        return NULL;
+    // Find the point of insertion into the tree
+    e_avl_node *cursor = tree->m_top;
+    for (;;) {
+        (void)stack_push(stack, cursor);
+
+        int const lcmp = cmpfunc(key, cursor);
+        if (lcmp < 0) {
+            if (cursor->lc == NULL) {
+                return NULL;
+            } else {
+                cursor = cursor->lc;
+            }
+        } else if (lcmp > 0) {
+            if (cursor->rc == NULL) {
+                return NULL;
+            } else {
+                cursor = cursor->rc;
+            }
+        } else {
+            break;
+        }
     }
 
-    // At this point, the stack contains an element with key
-    // equal to `key`
-    e_avl_node *const to_remove = stack_pop(stack);
-    e_avl_node *const rem_parent = stack_peek(stack);
+    tree->m_size--;
+    tree->m_gen++;
 
-    if (to_remove->lc == NULL && to_remove->rc == NULL) {
-        /* The node we are removing is a leaf node. Remove references to it */
-        if (rem_parent == NULL) {
+    e_avl_node *z = stack_pop(stack);
+    e_avl_node *const to_remove = z;
+    e_avl_node *x = stack_peek(stack);
+
+    if (z->lc == NULL && z->rc == NULL) {
+        // The node we are removing is a leaf node. Remove references to it
+        if (x == NULL) {
+            assert(tree->m_size == 0);
             tree->m_top = NULL;
+            return to_remove;
+
         } else {
-            if (rem_parent->lc == to_remove) {
-                rem_parent->lc = NULL;
+            if (x->lc == z) {
+                x->lc = NULL;
+                x->bf++;
             } else {
-                rem_parent->rc = NULL;
+                assert(x->rc == z);
+                x->rc = NULL;
+                x->bf--;
             }
         }
     } else {
-        /* Push the node we are removing onto the stack. We will replace it
-         * once we find a node */
-        void **const rem_stack_ptr = stack_push(stack, to_remove);
+        // Push the node we are removing onto the stack. We will replace it
+        // once we find a node
+        void **const rem_stack_ptr = stack_push(stack, z);
 
-        node = to_remove;
-        int const replace_case = (node->lc == NULL) ? DRIGHT : DLEFT;
+        e_avl_node *sub = z;
 
-        /* One of the child nodes is not NULL, find a child node to replace the
-         * candidate for deletion. */
-        if (node->lc != NULL) {
-            /* Find the largest keyed child in the left subtree */
-            node = node->lc;
+        // One of the child nodes is not NULL, find a child node to replace the
+        // candidate for deletion.
+        if (sub->lc != NULL) {
+            // Find the largest keyed child in the left subtree
+            sub = sub->lc;
             for (;;) {
-                (void)stack_push(stack, node);
-                if (node->rc == NULL) {
+                if (sub->rc == NULL) {
                     break;
                 }
-                node = node->rc;
+                (void)stack_push(stack, sub);
+
+                sub = sub->rc;
             }
+            e_avl_node *subp = stack_peek(stack);
+
+            sub->bf = z->bf;
+            if (subp != z) {
+                // sub is the right child of subp
+                subp->bf--;
+                subp->rc = sub->lc;
+
+                sub->lc = z->lc;
+                sub->rc = z->rc;
+            } else {
+                // sub is the left child of z, effectively becoming its own
+                // parent.
+                sub->bf++;
+                sub->rc = z->rc;
+            }
+
         } else {
-            /* find the smallest keyed child in the right subtree */
-            node = node->rc;
-            (void)stack_push(stack, node);
 
-            // We do not loop and descend to try to find a better replacement
-            // in this case.
+            sub = sub->rc;
+            // z becomes sub's right child before being removed, this reduces
+            // the height of the right subtree by 1.
+            sub->bf = z->bf - 1;
 
-            assert(node->lc == NULL); // LCOV_EXCL_BR_LINE
+            assert(sub->lc == NULL); // LCOV_EXCL_BR_LINE
             /* Node cannot have a left child because it would
              * create the illegal tree below.
              *
@@ -512,75 +445,145 @@ avl_base_rem(
              * If `c` existed and the tree was balanced, `a` would have a left
              * child that would be preferred for replacement.
              */
+
+            sub->lc = z->lc;
+            // leave sub->rc intact
         }
 
-        /* At this point, we have found the node to replace the node that we're deleting.
-         * We have placed every node along that path onto our stack */
+        // Replace the element in the stack with the ptr
+        *rem_stack_ptr = sub;
 
-        e_avl_node *const replacement = stack_pop(stack);
-        e_avl_node *const replace_parent = stack_peek(stack);
-
-        /* make sure to keep children of replace_candidate */
-        if (replace_case == DLEFT) {
-            /* new_cand is largest child in left sub-tree of the node we are
-             * removing. We know new_cand has no right children, because they
-             * would be larger than it, and we would have preferred them */
-            if (replace_parent->lc == replacement) {
-                replace_parent->lc = replacement->lc;
-            } else {
-                replace_parent->rc = replacement->lc;
-            }
-            assert(replacement->rc == NULL); // LCOV_EXCL_BR_LINE
-
+        if (x == NULL) {
+            tree->m_top = sub;
         } else {
-            /* new_cand is the smallest child in the right sub-tree of the node
-             * we are removing */
-            assert(replacement != replace_parent->lc); // LCOV_EXCL_BR_LINE
-            /* `new_cand` cannot be a left child,
-             * because the tree below is illegal.
-             *
-             *            a
-             *             \
-             *              b
-             *             /
-             *            c
-             * If the candidate for replacement was the left child `c`, then
-             * `a` must have a left child, which would be preferred for
-             * replacement.
-             *
-             * similarly, the candidate for replacement cannot have a left
-             * child as it would be preferred for replacement
-             */
-            assert(replacement->lc == NULL); // LCOV_EXCL_BR_LINE
-            replace_parent->rc = replacement->rc;
-        }
-
-        /* swap out the node we are removing with the replacement candidate */
-        replacement->rc = to_remove->rc;
-        replacement->lc = to_remove->lc;
-        if (rem_parent == NULL) {
-            tree->m_top = replacement;
-        } else {
-            if (rem_parent->rc == to_remove) {
-                rem_parent->rc = replacement;
+            if (x->lc == z) {
+                x->lc = sub;
             } else {
-                rem_parent->lc = replacement;
+                x->rc = sub;
             }
         }
-
-        /* Replace the element in the stack with the ptr */
-        *rem_stack_ptr = replacement;
     }
+    z = NULL;
+    x = stack_pop(stack);
 
-    /* Zero some fields of the node we removed */
-    to_remove->lc = NULL;
-    to_remove->rc = NULL;
-    to_remove->height = 0;
+    // At this point z has been removed from the tree, and x is the first node
+    // above it that is potentially unbalanced.
 
-    rebalance(tree, stack);
+    for (;;) {
+        assert(x != NULL);
 
-    tree->m_size--;
-    tree->m_gen++;
+        if (x->bf == 1 || x->bf == -1) {
+            // Change in height was absorbed.
+            break;
+        } else if (x->bf == 2 || x->bf == -2) {
+            // The node was made unbalanced! It can be balanced by rotation,
+            // then we may be done.
+            e_avl_node **branch = &tree->m_top;
+            e_avl_node *y = stack_peek(stack);
+            if (y != NULL) {
+                branch = (y->rc == x) ? &y->rc : &y->lc;
+            }
+            int zb = 0;
+
+            if (x->bf == 2) {
+                // The height of the left subtree was decreased by 1
+                z = x->rc;
+                zb = z->bf;
+                if (zb < 0) {
+                    e_avl_node *const c = z->lc;
+                    rotate_right(&x->rc);
+                    rotate_left(branch);
+
+                    if (c->bf == 0) {
+                        z->bf = 0;
+                        x->bf = 0;
+                    } else if (c->bf == -1) {
+                        // left child was higher
+                        x->bf = 0;
+                        z->bf = 1;
+                    } else {
+                        // right child was higher
+                        assert(c->bf == 1);
+                        x->bf = -1;
+                        z->bf = 0;
+                    }
+
+                    c->bf = 0;
+                    x = c;
+                } else {
+                    rotate_left(branch);
+                    if (zb == 0) {
+                        // x gets z's left child
+                        x->bf = 1;
+                        z->bf = -1;
+                    } else {
+                        z->bf = 0;
+                        x->bf = 0;
+                    }
+                    x = z;
+                }
+            } else {
+                // The height of the right subtree was decreased by 1
+                z = x->lc;
+                zb = z->bf;
+                if (zb > 0) {
+                    e_avl_node *const c = z->rc;
+                    rotate_left(&x->lc);
+                    rotate_right(branch);
+
+                    if (c->bf == 0) {
+                        z->bf = 0;
+                        x->bf = 0;
+                    } else if (c->bf == -1) {
+                        // left child was higher
+                        x->bf = 1;
+                        z->bf = 0;
+                    } else {
+                        // right child was higher
+                        assert(c->bf == 1);
+                        x->bf = 0;
+                        z->bf = -1;
+                    }
+
+                    c->bf = 0;
+                    x = c;
+                } else {
+                    rotate_right(branch);
+                    if (zb == 0) {
+                        // x gets z's right child
+                        x->bf = -1;
+                        z->bf = 1;
+
+                    } else {
+                        z->bf = 0;
+                        x->bf = 0;
+                    }
+                    x = z;
+                }
+            }
+            // After the rotation, x is set to y's new child to ensure that
+            // moving up the tree is correct.
+
+            // TODO: Is this exit condition correct?
+            if (zb == 0) break;
+
+        } else {
+            assert(x->bf == 0);
+            // Our balance has become 0, we must continue retracing up the
+            // tree.
+        }
+
+        z = x;
+        x = stack_pop(stack);
+        if (x == NULL) break;
+
+        // adjust x's bf to account for the decreased height of subtree z
+        if (x->rc == z) {
+            x->bf--;
+        } else {
+            x->bf++;
+        }
+    }
 
     return to_remove;
 }
