@@ -391,7 +391,7 @@ avl_base_rem(
         }
     } else {
         // Push the node we are removing onto the stack. We will replace it
-        // once we find a node
+        // once we find a substitute.
         void **const rem_stack_ptr = stack_push(stack, z);
 
         e_avl_node *sub = z;
@@ -409,7 +409,7 @@ avl_base_rem(
 
                 sub = sub->rc;
             }
-            e_avl_node *subp = stack_peek(stack);
+            e_avl_node *const subp = stack_peek(stack);
 
             sub->bf = z->bf;
             if (subp != z) {
@@ -420,17 +420,18 @@ avl_base_rem(
                 sub->lc = z->lc;
                 sub->rc = z->rc;
             } else {
-                // sub is the left child of z, effectively becoming its own
-                // parent.
+                // sub is the left child of z, so we effectively move it up the
+                // tree.
                 sub->bf++;
                 sub->rc = z->rc;
+                // Leave sub->lc intact
             }
 
         } else {
 
             sub = sub->rc;
-            // z becomes sub's right child before being removed, this reduces
-            // the height of the right subtree by 1.
+            // sub is the right child of z, so we effectively move it up the
+            // tree.
             sub->bf = z->bf - 1;
 
             assert(sub->lc == NULL); // LCOV_EXCL_BR_LINE

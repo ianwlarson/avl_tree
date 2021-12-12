@@ -4,7 +4,7 @@ CC=gcc
 CFLAGS=-Ofast -Wall -std=gnu11
 
 OBJS = avlspeed.o avlhelper.o
-TESTS = avltest_00 avltest_01 avltest_02 avltest_03 avltest_04 avltest_05 avltest_06 avltest_07 avltest_08
+TESTS = avltest_00 avltest_01 avltest_02 avltest_03 avltest_04 avltest_05 avltest_06 avltest_07 avltest_08 avltest_09
 
 .PHONY: all clean
 
@@ -41,6 +41,9 @@ avltest_07: avltest_07.c avlhelper.o
 	$(CC) $(CFLAGS) $^ -I. -o $@
 
 avltest_08: avltest_08.c avlhelper.o
+	$(CC) $(CFLAGS) $^ -I. -o $@
+
+avltest_09: avltest_09.c avlhelper.o
 	$(CC) $(CFLAGS) $^ -I. -o $@
 
 clean:
