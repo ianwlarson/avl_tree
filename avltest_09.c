@@ -68,6 +68,16 @@ main(void)
         assert(BF(six) == 0);
         assert(leftc(six) == NULL && rightc(six) == NULL);
 
+        my_t *two = leftc(three);
+        assert(KEY(two) == 2);
+        assert(BF(two) == 0);
+        assert(leftc(two) == NULL && rightc(two) == NULL);
+
+        my_t *four = rightc(three);
+        assert(KEY(four) == 4);
+        assert(BF(four) == 0);
+        assert(leftc(four) == NULL && rightc(four) == NULL);
+
         my_t *ten = rightc(eight);
         assert(KEY(ten) == 10);
         assert(BF(ten) == 1);
@@ -76,6 +86,16 @@ main(void)
         assert(KEY(eleven) == 11);
         assert(BF(eleven) == 1);
         assert(leftc(eleven) == NULL);
+
+        my_t *twelve = rightc(eleven);
+        assert(KEY(twelve) == 12);
+        assert(BF(twelve) == 0);
+        assert(leftc(twelve) == NULL && rightc(twelve) == NULL);
+
+        my_t *nine = leftc(ten);
+        assert(KEY(nine) == 9);
+        assert(BF(nine) == 0);
+        assert(leftc(nine) == NULL && rightc(nine) == NULL);
     }
 
 

@@ -484,13 +484,11 @@ avl_base_rem(
             if (y != NULL) {
                 branch = (y->rc == x) ? &y->rc : &y->lc;
             }
-            int zb = 0;
 
             if (x->bf == 2) {
                 // The height of the left subtree was decreased by 1
                 z = x->rc;
-                zb = z->bf;
-                if (zb < 0) {
+                if (z->bf < 0) {
                     e_avl_node *const c = z->lc;
                     rotate_right(&x->rc);
                     rotate_left(branch);
@@ -513,10 +511,13 @@ avl_base_rem(
                     x = c;
                 } else {
                     rotate_left(branch);
-                    if (zb == 0) {
+                    if (z->bf == 0) {
                         // x gets z's left child
                         x->bf = 1;
                         z->bf = -1;
+
+                        // TODO: Is this exit condition correct?
+                        break;
                     } else {
                         z->bf = 0;
                         x->bf = 0;
@@ -526,8 +527,7 @@ avl_base_rem(
             } else {
                 // The height of the right subtree was decreased by 1
                 z = x->lc;
-                zb = z->bf;
-                if (zb > 0) {
+                if (z->bf > 0) {
                     e_avl_node *const c = z->rc;
                     rotate_left(&x->lc);
                     rotate_right(branch);
@@ -550,10 +550,13 @@ avl_base_rem(
                     x = c;
                 } else {
                     rotate_right(branch);
-                    if (zb == 0) {
+                    if (z->bf == 0) {
                         // x gets z's right child
                         x->bf = -1;
                         z->bf = 1;
+
+                        // TODO: Is this exit condition correct?
+                        break;
 
                     } else {
                         z->bf = 0;
@@ -564,9 +567,6 @@ avl_base_rem(
             }
             // After the rotation, x is set to y's new child to ensure that
             // moving up the tree is correct.
-
-            // TODO: Is this exit condition correct?
-            if (zb == 0) break;
 
         } else {
             assert(x->bf == 0);
